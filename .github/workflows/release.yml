@@ -25,15 +25,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read id and version from the manifest
+      - name: Read id, name and version from the manifest
         id: mod
         run: |
           id=$(python3 -c "import json;print(json.load(open('manifest.json'))['id'])")
+          name=$(python3 -c "import json;m=json.load(open('manifest.json'));print(m.get('name') or m['id'])")
           version=$(python3 -c "import json;print(json.load(open('manifest.json'))['version'])")
           echo "id=$id"           >> "$GITHUB_OUTPUT"
+          echo "name=$name"       >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           # ModUpdate.pickZipAsset looks for "<id>-<version>.zip" before it
-          # settles for anything else, so this name is a contract, not a label.
+          # settles for anything else, so this name is a contract, not a
+          # label -- it stays on the ID even when the mod is rebranded. The
+          # release TITLE is the label, and that one follows the name.
           echo "asset=$id-$version.zip" >> "$GITHUB_OUTPUT"
 
       - name: Stop if this version is already released
@@ -90,7 +94,7 @@ jobs:
           notes=$(awk '/^## /{ if (seen) exit; seen=1; next } seen' CHANGELOG.md)
           gh release create "v${{ steps.mod.outputs.version }}" \
             "${{ steps.mod.outputs.asset }}" \
-            --title "${{ steps.mod.outputs.id }} ${{ steps.mod.outputs.version }}" \
+            --title "${{ steps.mod.outputs.name }} ${{ steps.mod.outputs.version }}" \
             --notes "${notes:-See CHANGELOG.md}"
         env:
           GH_TOKEN: ${{ github.token }}
