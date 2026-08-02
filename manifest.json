@@ -1,7 +1,7 @@
 {
   "id": "groovy_palette",
   "name": "Groovy Palette & Frames",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
@@ -15,5 +15,5 @@
   "permissions": [
     "engine_internals"
   ],
-  "description": "Thirty more entries on the COLORS row -- Amiga Workbench, the C64 boot screen, a Virtual Boy, rainbow, fuchsia, vaporwave -- plus eight new borders for every text box and menu. USE ADVANCED rides the engine's per-tile colorization instead of replacing it, so a palette recolours eighteen colours on screen rather than flattening them to four. A START menu browser scrolls the palettes over the running game."
+  "description": "Thirty more entries on the COLORS row -- Amiga Workbench, the C64 boot screen, a Virtual Boy, rainbow, fuchsia, vaporwave -- plus eight new borders for every text box and menu. Press A on OPTION -> COLORS and the menu lifts off the game: the palette name and nothing else, left and right to walk the list, previewed on the running game. USE ADVANCED rides the engine per-tile colorization instead of replacing it, so a palette recolours eighteen colours on screen rather than four."
 }

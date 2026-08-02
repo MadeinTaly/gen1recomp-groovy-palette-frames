@@ -10,8 +10,9 @@ return {
       "thirty palettes appended to the engine's own COLORS row, cycled by the same option and the same hotkey",
       "FRAME: eight new borders for every text box and menu, drawn as a glyph page of this mod's own and pointed at through Font.BORDER, plus GAME BOY for the engine's six",
       "USE ADVANCED, which rides the engine's per-tile colorization instead of replacing it: a palette recolours the eighteen colours ADVANCED puts on screen rather than flattening them to four, by reading its four rungs as a curve indexed by luminance",
-      "START -> PALETTE, a browser that scrolls the list over the running game: the screen is not opaque, so colorisation recolours the actual frame rather than a swatch",
-      "START MENU, which removes that browser and leaves the palettes",
+      "A on the engine's own OPTION -> COLORS row lifts the menu off the game and previews the palette on it, name only, left/right to walk the list -- attached through ui.options.rows as an activate on the row the engine owns, so the row still steps exactly as before",
+      "START -> PALETTE, the same browser mid-game: the screen is not opaque, so colorisation recolours the actual frame rather than a swatch",
+      "PREVIEW, which removes both ways into that browser and leaves the palettes",
       "PACKS, narrowing them to the twelve hardware ones or the eighteen invented ones",
     },
     changed = {

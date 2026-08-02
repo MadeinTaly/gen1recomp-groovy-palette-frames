@@ -197,7 +197,7 @@ return function(mod)
     -- The browser is the point of having thirty of these: choosing a colour
     -- from a menu that is covering the game is choosing it blind. Off puts
     -- the mod back to being nothing but extra rungs on the OPTIONS row.
-    { key = "browser", label = "START MENU", type = "toggle", default = true },
+    { key = "browser", label = "PREVIEW", type = "toggle", default = true },
     -- See "riding ADVANCED" below. OFF is what 0.2.0 did.
     { key = "advanced", label = "USE ADVANCED", type = "choice", default = "tint",
       choices = {
@@ -556,10 +556,14 @@ local function newBrowser(game)
     local n = #modes
     if n == 0 then game.stack:pop(); return end
 
-    if input:wasPressed("up") then
+    -- Left/right and up/down both walk the list. Left/right is the natural
+    -- one: this screen is reached by pressing A on the COLORS row, which is
+    -- stepped with left/right, so the hand is already there and the gesture
+    -- carries on meaning the same thing.
+    if input:wasPressed("left") or input:wasPressed("up") then
       self.index = self.index > 1 and self.index - 1 or n
       apply(modes[self.index])
-    elseif input:wasPressed("down") then
+    elseif input:wasPressed("right") or input:wasPressed("down") then
       self.index = self.index < n and self.index + 1 or 1
       apply(modes[self.index])
     elseif input:wasPressed("a") or input:wasPressed("start") then
@@ -573,14 +577,25 @@ local function newBrowser(game)
 
   function self:draw()
     local id = modes[self.index]
-    local label = PaletteFX.MODE_LABELS[id] or id or "?"
+    local label = fit(PaletteFX.MODE_LABELS[id] or id or "?")
 
-    -- A box at the TOP: the player is looking at the world, and the world
-    -- is mostly in the middle and lower half of a Gen 1 screen.
-    Font.drawBox(0, 0, BOX_TILES_W, BOX_TILES_H)
+    -- The name and nothing else. The point of the screen is the game behind
+    -- it, so every pixel of chrome is a pixel of the thing being previewed
+    -- that the player cannot see -- the hint line this used to carry cost a
+    -- third of the box for something you need once.
+    --
+    -- It cannot be bare text, though: a glyph is drawn in one shade and the
+    -- world behind it is drawn in four, so over a busy map the name would
+    -- be unreadable in exactly the palettes worth looking at. So it keeps a
+    -- box, sized to the word rather than to the screen.
+    --
+    -- A box at the TOP: a Gen 1 screen puts the player and the world in the
+    -- middle and lower half.
+    local tiles = math.ceil(Font.width(label) / 8) + 2
+    if tiles > BOX_TILES_W then tiles = BOX_TILES_W end
+    Font.drawBox(0, 0, tiles, 3)
     love.graphics.setColor(0, 0, 0, 1)
-    Font.draw(fit(Strings("%s  %d/%d", label, self.index, #modes)), TEXT_X, 8)
-    Font.draw(fit(Strings("A:KEEP B:CANCEL")), TEXT_X, 18)
+    Font.draw(label, TEXT_X, 8)
   end
 
   return self
@@ -619,6 +634,31 @@ end
         label = "PALETTE",
         onSelect = function() mod.ui.push(game, SCREEN) end,
       })
+    end)
+
+    -- ------- and from the COLORS row itself, which is where you already are
+    --
+    -- Choosing a colour from a menu that is covering the game is choosing it
+    -- blind, and OPTION -> COLORS is exactly where a player goes to do it.
+    -- An options row descriptor may carry `activate = fn(game)`, which
+    -- OptionsMenu calls on A (src/ui/OptionsMenu.lua: "if row.activate ...
+    -- if input:wasPressed('a')"), and the rows run through this hook before
+    -- the menu is built. So the row keeps stepping with left/right as it
+    -- always did, and A now lifts the menu off the game instead.
+    --
+    -- Attached to the row the ENGINE calls "colors" rather than to one of
+    -- ours, because that is the row the player is on. Left alone if a
+    -- future engine renames it, or if another mod got there first and gave
+    -- it an activate of its own.
+    mod.hooks:wrap("ui.options.rows", function(next, game, rows)
+      local out = next(game, rows)
+      if type(out) ~= "table" then return out end
+      for _, row in ipairs(out) do
+        if row.id == "colors" and row.activate == nil then
+          row.activate = function(g) mod.ui.push(g or game, SCREEN) end
+        end
+      end
+      return out
     end)
   end
 
