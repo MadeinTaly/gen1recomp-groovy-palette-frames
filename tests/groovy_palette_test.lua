@@ -322,6 +322,73 @@ do
   end
 end
 
+-- ------- the frames
+--
+-- A border is six font glyphs. These check the whole chain: the page is
+-- registered, the codes RESOLVE to real glyphs on it (a code pointing past
+-- the sheet draws nothing and reports no error), the border table is
+-- actually repointed, and GAME BOY puts the engine's own six back.
+
+do
+  local Font = require("src.render.Font")
+  local api = run.loader.exports.groovy_palette
+
+  T.check(type(api.frameCodes) == "function", "the frame surface is exported")
+
+  local page = Data.font and Data.font.pages and Data.font.pages.groovy_frames
+  T.check(page ~= nil, "the frame glyph page is registered")
+  T.eq(page and page.base, 0x200, "at the base the codes are computed from")
+
+  -- every frame's six codes must land ON the sheet. The page is 6 glyphs
+  -- per row and one row per frame, so the last code of the last frame is
+  -- the last glyph -- an off-by-one here draws an empty box and says
+  -- nothing about it.
+  local names = { "thin", "double", "triple", "thick",
+                  "wide", "dash", "beads", "track" }
+  local highest = 0
+  for _, name in ipairs(names) do
+    local codes = api.frameCodes(name)
+    T.check(codes ~= nil, name .. " resolves to a set of codes")
+    if codes then
+      for _, key in ipairs({ "tl", "h", "tr", "v", "bl", "br" }) do
+        T.check(codes[key] ~= nil, name .. " defines " .. key)
+        if codes[key] and codes[key] > highest then highest = codes[key] end
+      end
+    end
+  end
+
+  -- The sheet's own size is the authority on how many glyphs exist, and it
+  -- is read from the PNG header rather than through Assets -- a stubbed
+  -- love returns a placeholder image whose dimensions prove nothing, which
+  -- is how the first version of this check passed while testing nothing.
+  local f = io.open(page.image, "rb")
+  T.check(f ~= nil, "the frame sheet is where the manifest says it is")
+  if f then
+    local header = f:read(24)
+    f:close()
+    local function be32(s, at)
+      local a, b, c, d = s:byte(at, at + 3)
+      return ((a * 256 + b) * 256 + c) * 256 + d
+    end
+    T.eq(header:sub(2, 4), "PNG", "and it is a PNG")
+    local w, h = be32(header, 17), be32(header, 21)
+    local glyphs = (w / 8) * (h / 8)
+    T.eq(highest - 0x200 + 1, glyphs,
+      ("every code lands on the sheet (%d codes, %dx%d = %d glyphs)")
+        :format(highest - 0x200 + 1, w, h, glyphs))
+  end
+
+  T.check(api.frameCodes("gb") == nil, "GAME BOY is not one of ours")
+
+  -- and the border table must actually move
+  local vanillaTl = Font.DEFAULT_BORDER.tl
+  local codes = api.frameCodes("double")
+  for key, code in pairs(codes) do Font.BORDER[key] = code end
+  T.check(Font.BORDER.tl ~= vanillaTl, "pointing the border elsewhere takes")
+  for key, code in pairs(Font.DEFAULT_BORDER) do Font.BORDER[key] = code end
+  T.eq(Font.BORDER.tl, vanillaTl, "and GAME BOY restores the engine's own")
+end
+
 PaletteFX.mode = before
 run.release()
 
