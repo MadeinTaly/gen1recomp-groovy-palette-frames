@@ -1,0 +1,24 @@
+-- Human-facing metadata: tooling and the manager's detail pane read this.
+return {
+  summary = "Thirty more COLORS palettes: Amiga, C64, Virtual Boy, rainbow, fuchsia, vaporwave.",
+  author = "MadeinTaly",
+  support = "https://linktr.ee/made_in_taly",
+  tags = { "cosmetic", "ui", "palette", "retro" },
+  compat = { modApi = 2 },
+  differences = {
+    added = {
+      "thirty palettes appended to the engine's own COLORS row, cycled by the same option and the same hotkey",
+      "PACKS, narrowing them to the twelve hardware ones or the eighteen invented ones",
+    },
+    changed = {
+      "nothing about the vanilla seven: they keep their positions, so a save pointing at SGB still lands on SGB",
+    },
+    known = {
+      "four shades is four shades -- these recolour the Game Boy's ramp, they do not add colours to a scene",
+      "a palette must fall in brightness or the picture reads inside out, so every one here is checked by luminance rather than by eye; AMIGA had to be reordered away from Workbench's own layout because its orange is brighter than its blue",
+      "VBOY is lifted toward white-hot at the top rung: a ramp of saturated reds has too little luminance range to stay legible",
+      "disable the mod with one of its palettes saved and the game falls back to SGB rather than breaking -- the id simply stops resolving",
+      "the pack appends to PaletteFX.MODES, a plain module array; a future engine release could make that a registry, which would need a rewrite here",
+    },
+  },
+}
