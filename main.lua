@@ -198,11 +198,24 @@ return function(mod)
     -- from a menu that is covering the game is choosing it blind. Off puts
     -- the mod back to being nothing but extra rungs on the OPTIONS row.
     { key = "browser", label = "START MENU", type = "toggle", default = true },
+    -- See "riding ADVANCED" below. OFF is what 0.2.0 did.
+    { key = "advanced", label = "USE ADVANCED", type = "choice", default = "tint",
+      choices = {
+        { "TINT", "tint" },
+        { "FULL", "full" },
+        { "OFF", "off" },
+      } },
   })
 
   local function wanted()
     local ok, value = pcall(function() return mod.options:get("packs") end)
     return ok and value or "all"
+  end
+
+  local function advancedMode()
+    local ok, value = pcall(function() return mod.options:get("advanced") end)
+    if not ok or value == nil then return "tint" end
+    return value
   end
 
   local PaletteFX = require("src.render.PaletteFX")
@@ -237,18 +250,187 @@ return function(mod)
     end
   end
 
+  -- ------- riding ADVANCED instead of replacing it
+  --
+  -- A Game Boy screen is four shades, and that is what every mode here was
+  -- built on. ADVANCED is not: it is the pokered-gbc pack, which resolves a
+  -- real colour PER TILE and assigns each tile one of EIGHT background
+  -- palettes. Counted from the pack on disk:
+  --
+  --     24 tilesets carry per-tile data
+  --      8 background palettes are live at once  ->  up to 32 colours
+  --     47 distinct colours across the whole pack
+  --
+  -- So picking RAINBOW used to be a straight downgrade: thirty-two colours
+  -- traded for four. The palette was applied INSTEAD of ADVANCED, because a
+  -- palette is a four-rung ramp and that is all the shade shader can take.
+  --
+  -- It does not have to be. ADVANCED's colours arrive as ordinary RGB
+  -- triples, and a ramp can be read as a CURVE rather than four steps:
+  -- take each colour's luminance, find that height on the ramp, and
+  -- interpolate between the two rungs it falls between. Forty-seven source
+  -- colours come back as forty-seven colours in the palette's own hue
+  -- family, not four.
+  --
+  --     TINT   keep ADVANCED's colour, pull it toward the palette
+  --     FULL   go all the way onto the ramp, but along the curve
+  --     OFF    what 0.2.0 did: four shades, ADVANCED replaced
+  --
+  -- The rung order is what makes this work, and it is the same rule the
+  -- suite already enforces on every palette: lightest first, falling in
+  -- brightness. A palette that failed that check would map light tiles to
+  -- dark colours and render the world inside out.
+
+  local BLEND = { tint = 0.55, full = 1.0 }
+
+  local function luminance(c)
+    return 0.299 * c[1] + 0.587 * c[2] + 0.114 * c[3]
+  end
+
+  -- the ramp read as a curve: 0 luminance is the last rung, 255 the first
+  local function rampAt(ramp, l)
+    local p = (255 - l) / 255 * (#ramp - 1)
+    if p < 0 then p = 0 elseif p > #ramp - 1 then p = #ramp - 1 end
+    local i = math.floor(p)
+    local a = ramp[i + 1]
+    local b = ramp[math.min(i + 2, #ramp)]
+    local t = p - i
+    return a[1] + (b[1] - a[1]) * t,
+           a[2] + (b[2] - a[2]) * t,
+           a[3] + (b[3] - a[3]) * t
+  end
+
+  local function clamp255(v)
+    v = math.floor(v + 0.5)
+    if v < 0 then return 0 elseif v > 255 then return 255 end
+    return v
+  end
+
+  local function recolor(c, ramp, amount)
+    local r, g, b = rampAt(ramp, luminance(c))
+    return {
+      clamp255(c[1] + (r - c[1]) * amount),
+      clamp255(c[2] + (g - c[2]) * amount),
+      clamp255(c[3] + (b - c[3]) * amount),
+    }
+  end
+
+  local function recolorAll(colors, ramp, amount)
+    local out = {}
+    for i, c in ipairs(colors) do out[i] = recolor(c, ramp, amount) end
+    return out
+  end
+
+  -- The active ramp, but only while a Groovy palette is selected AND the
+  -- option asks for it. Returns nil the rest of the time, which is what
+  -- every wrapper below tests to decide whether to stay out of the way.
+  local function riding()
+    local ramp = mine[PaletteFX.mode or ""]
+    if not ramp then return nil end
+    local how = advancedMode()
+    local amount = BLEND[how]
+    if not amount then return nil end
+    -- No pack, nothing to ride: an install without data/palettes_gbc.lua
+    -- must fall back to the four-shade path rather than to nothing at all.
+    -- usesGbcPack already refuses in that case, so without this check the
+    -- palette would neither ride ADVANCED nor replace it.
+    if not PaletteFX.gbcPack() then return nil end
+    return ramp, amount, how
+  end
+
+  -- ------- 1. take the ADVANCED code path at all
+  --
+  -- usesGbcPack is the single gate: TileRenderer, SpriteRenderer and this
+  -- module all ask it before reading the pack. Answering yes for our own
+  -- ids is what puts a Groovy palette on the per-tile path instead of the
+  -- four-shade one.
+  if not PaletteFX._groovyPaletteOriginalUses then
+    PaletteFX._groovyPaletteOriginalUses = PaletteFX.usesGbcPack
+  end
+  local originalUses = PaletteFX._groovyPaletteOriginalUses
+
+  PaletteFX.usesGbcPack = function(mode)
+    mode = mode or PaletteFX.mode
+    if mine[mode or ""] and BLEND[advancedMode()] then
+      -- only claim the path when the pack is actually there to walk it
+      return PaletteFX.gbcPack() ~= nil
+    end
+    return originalUses(mode)
+  end
+
+  -- ------- 2. the overworld's eight background palettes
+  if not PaletteFX._groovyPaletteOriginalWorld then
+    PaletteFX._groovyPaletteOriginalWorld = PaletteFX.worldGroupColors
+  end
+  local originalWorld = PaletteFX._groovyPaletteOriginalWorld
+
+  PaletteFX.worldGroupColors = function(data, tileset, mapId, playerCellY)
+    local groups = originalWorld(data, tileset, mapId, playerCellY)
+    local ramp, amount = riding()
+    if not (groups and ramp) then return groups end
+    local out = {}
+    for i, palette in ipairs(groups) do
+      out[i] = recolorAll(palette, ramp, amount)
+    end
+    return out
+  end
+
+  -- ------- 3. the overworld sprites' OBJ palettes
+  if not PaletteFX._groovyPaletteOriginalObp then
+    PaletteFX._groovyPaletteOriginalObp = PaletteFX.spriteObp
+  end
+  local originalObp = PaletteFX._groovyPaletteOriginalObp
+
+  PaletteFX.spriteObp = function(spriteDef, seed)
+    local colors, group = originalObp(spriteDef, seed)
+    local ramp, amount = riding()
+    if not (colors and ramp) then return colors, group end
+    return recolorAll(colors, ramp, amount), group
+  end
+
+  -- ------- 4. do not serve a stale bake
+  --
+  -- ADVANCED does not shade at draw time, it BAKES: the tileset atlas and
+  -- the sprite sheets are rendered once per map and cached under a key that
+  -- ends in darkKey(). Two palettes would otherwise share one cache entry
+  -- and the second would show the first one's colours. The suffix is the
+  -- engine's own mechanism for exactly this -- a dark cave uses it to keep
+  -- its lit and unlit bakes apart -- so the palette rides it.
+  if not PaletteFX._groovyPaletteOriginalDarkKey then
+    PaletteFX._groovyPaletteOriginalDarkKey = PaletteFX.darkKey
+  end
+  local originalDarkKey = PaletteFX._groovyPaletteOriginalDarkKey
+
+  PaletteFX.darkKey = function()
+    local base = originalDarkKey()
+    local _, _, how = riding()
+    if not how then return base end
+    return base .. "#groovy:" .. tostring(PaletteFX.mode) .. ":" .. how
+  end
+
   -- ------- effectiveColors: substitute our four, then let the original run
   --
   -- Calling through rather than returning early matters: the original applies
   -- the shade map LAST -- rBGP is a hardware register write, so a dark cave
   -- has to read dark in these palettes exactly as it does in CLASSIC's pea
   -- greens. Handing it our colours as its input keeps that composition.
+  --
+  -- While riding ADVANCED this must NOT substitute. The named palettes --
+  -- battle backdrops, a Pokemon's own colours, the menus -- come through
+  -- here already resolved from the pack, so flattening them to our four
+  -- would throw away exactly the variety we came for. They get the same
+  -- curve as everything else instead.
   if not PaletteFX._groovyPaletteOriginalColors then
     PaletteFX._groovyPaletteOriginalColors = PaletteFX.effectiveColors
   end
   local originalColors = PaletteFX._groovyPaletteOriginalColors
 
   PaletteFX.effectiveColors = function(c)
+    local ramp, amount = riding()
+    if ramp then
+      if not c then return originalColors(c) end
+      return originalColors(recolorAll(c, ramp, amount))
+    end
     local swap = mine[PaletteFX.mode or ""]
     if swap then return originalColors(swap) end
     return originalColors(c)
@@ -262,6 +444,10 @@ return function(mod)
 
   PaletteFX.ensureZones = function(zones)
     if zones and zones[1] then return zones end
+    -- riding ADVANCED there is nothing to force: the colour is already in
+    -- the bake, and inventing a whole-screen grey zone would hand the
+    -- shader a flat ramp to remap over the top of it
+    if riding() then return originalZones(zones) end
     if mine[PaletteFX.mode or ""] then
       -- Same shape the vanilla forced modes invent: one zone covering the
       -- screen, carrying the plain DMG greys for the shader to remap.

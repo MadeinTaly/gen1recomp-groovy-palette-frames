@@ -1,7 +1,7 @@
 {
   "id": "groovy_palette",
   "name": "Groovy Palette",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
@@ -15,5 +15,5 @@
   "permissions": [
     "engine_internals"
   ],
-  "description": "Thirty more entries on the COLORS row: Amiga Workbench, the C64 boot screen, a Virtual Boy, an amber terminal, plus rainbow, fuchsia, vaporwave and the rest. A START menu browser scrolls them over the running game, so you pick a palette by looking at the game in it rather than at a menu covering it. PACKS narrows the list to RETRO or COLOUR. Every palette is checked by luminance, because a Game Boy palette that does not fall in brightness reads inside out."
+  "description": "Thirty more entries on the COLORS row: Amiga Workbench, the C64 boot screen, a Virtual Boy, an amber terminal, plus rainbow, fuchsia, vaporwave and the rest. USE ADVANCED rides the engine's per-tile colorization instead of replacing it, so a palette recolours eighteen colours on screen rather than flattening them to four. A START menu browser scrolls the list over the running game. PACKS narrows it to RETRO or COLOUR."
 }

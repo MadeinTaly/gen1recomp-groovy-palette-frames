@@ -28,8 +28,49 @@ cycle the same list.
 
 | Row | Values | Meaning |
 | --- | --- | --- |
+| `USE ADVANCED` | `TINT` / `FULL` / `OFF` | ride the engine's per-tile colour instead of replacing it — see below |
 | `START MENU` | on / off | the browser above; off removes the row and the screen and leaves the palettes |
 | `PACKS` | `ALL` / `RETRO` / `COLOUR` | all thirty, the twelve that are somebody's real hardware, or the eighteen invented ones |
+
+## Four colours, or eighteen
+
+The engine's **ADVANCED** mode is not a four-shade mode at all. It is the
+pokered-gbc pack: a real colour resolved *per tile*, with **eight background
+palettes live at once**. Until 0.3.0, picking RAINBOW switched that off — a
+palette is a four-rung ramp, and four rungs is what the shade shader takes.
+
+It does not have to be. A ramp can be read as a **curve** instead of four
+steps: take each colour's luminance, find that height on the ramp, and
+interpolate between the two rungs it falls between. Counted on the real
+pack, inside a house:
+
+| | colours on screen | across the game |
+| --- | --- | --- |
+| ADVANCED | 18 | 47 |
+| RAINBOW, before | 4 | 4 |
+| **RAINBOW, riding ADVANCED** | **18** | **47** |
+
+Nothing is collapsed — the counts match ADVANCED's exactly — and the
+source's own distinctions survive. VAPOR over a house interior:
+
+```
+          ADVANCED                          VAPOR
+grey   247,230,214 156,156,156 …    228,227,234 143,179,194 …
+pink   247,230,214 255,156,197 …    228,227,234 197,192,221 …
+green  247,230,214 123,165,  8 …    228,227,234 140,163,120 …
+```
+
+The green tiles still read greener than the pink ones. They are simply all
+inside VAPOR now.
+
+`TINT` keeps ADVANCED's colour and pulls it toward the palette; `FULL` goes
+all the way onto the ramp; `OFF` is the four-shade behaviour of 0.2.0. An
+install with no pokered-gbc pack falls back to `OFF` by itself.
+
+This is also the one place the lightest-first rule stops being cosmetic: the
+curve is indexed by brightness, so a palette out of order would map light
+tiles to dark colours and turn the world inside out. Every palette here is
+checked by luminance in the test suite.
 
 ## Why the browser is not a grid of swatches
 

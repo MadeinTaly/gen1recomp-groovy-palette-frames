@@ -28,7 +28,7 @@ if os.getenv("GROOVY_PALETTE_BROWSER_OFF") then
   SaveData.loadOptions = function(fs)
     local opts = realLoadOptions(fs)
     opts.modOptions = opts.modOptions or {}
-    opts.modOptions.groovy_palette = { browser = false }
+    opts.modOptions.groovy_palette = { browser = false, advanced = "off" }
     return opts
   end
   local off = T.sdk.loadMod(DIR, { data = Data })
@@ -46,6 +46,29 @@ if os.getenv("GROOVY_PALETTE_BROWSER_OFF") then
 
   T.check(#off.loader.exports.groovy_palette.palettes() >= 25,
     "but the palettes stay -- the switch is the browser, not the mod")
+
+  -- USE ADVANCED = OFF restores the four-shade behaviour of 0.2.0: the
+  -- palette replaces ADVANCED rather than riding it
+  do
+    local first = off.loader.exports.groovy_palette.palettes()[1]
+    PaletteFX.setMode(first.id)
+    T.check(not PaletteFX.usesGbcPack(),
+      "USE ADVANCED off keeps a Groovy palette off the per-tile path")
+    -- A forced palette needs a surface to be forced onto: a screen exposing
+    -- no SGB zones gets a whole-screen one invented, exactly as CLASSIC
+    -- does. Miss this and the palette silently does nothing there.
+    local zones = PaletteFX.ensureZones(nil)
+    T.check(zones and zones[1] ~= nil,
+      "and it forces a whole-screen zone again, as a four-shade mode must")
+    T.eq(PaletteFX.darkKey(), "",
+      "and bakes under the engine's own cache key")
+
+    -- the exact substitution 0.1.0 shipped, which is what OFF restores
+    local got4 = PaletteFX.effectiveColors(PaletteFX.GRAYS)
+    T.eq(got4[1][1], first.colors[1][1], "the palette replaces the zone colours outright")
+    T.eq(got4[4][3], first.colors[4][3], "including the darkest rung")
+  end
+
   off.release()
   T.finish("groovy_palette (START MENU off)")
   return
@@ -121,14 +144,24 @@ T.eq(PaletteFX.MODE_LABELS[sample.id], sample.label, "and each carries its label
 local before = PaletteFX.mode
 PaletteFX.mode = sample.id
 local got = PaletteFX.effectiveColors(PaletteFX.GRAYS)
-T.eq(got[1][1], sample.colors[1][1], "the active palette replaces the zone colours")
-T.eq(got[4][3], sample.colors[4][3], "including the darkest rung")
 
--- A forced palette needs a surface to be forced onto: a screen exposing no
--- SGB zones gets a whole-screen one invented, exactly as CLASSIC does. Miss
--- this and the palette silently does nothing on those screens.
-local zones = PaletteFX.ensureZones(nil)
-T.check(zones and zones[1] ~= nil, "a whole-screen zone is invented for our modes")
+-- What "changes the colours" means depends on which path the palette is
+-- on, and that is the point of USE ADVANCED. Riding ADVANCED (the default,
+-- when the pack is present) the greys are pulled TOWARD the palette rather
+-- than replaced by it -- replacing them is what throws the variety away.
+-- The exact-substitution assertions live in the four-shade pass at the
+-- bottom of this file, which is where that behaviour now is.
+if PaletteFX.gbcPack() then
+  T.check(got[1][1] ~= PaletteFX.GRAYS[1][1] or got[1][2] ~= PaletteFX.GRAYS[1][2],
+    "the active palette moves the zone colours off the DMG greys")
+  local toward = math.abs(got[1][1] - sample.colors[1][1])
+                 < math.abs(PaletteFX.GRAYS[1][1] - sample.colors[1][1])
+  T.check(toward or got[1][1] == sample.colors[1][1],
+    "and moves them toward the palette, not somewhere else")
+else
+  T.eq(got[1][1], sample.colors[1][1], "the active palette replaces the zone colours")
+  T.eq(got[4][3], sample.colors[4][3], "including the darkest rung")
+end
 
 -- an unknown mode must fall through untouched: that is what a player sees
 -- after disabling this mod with one of its palettes saved
@@ -220,6 +253,74 @@ browser:draw()
 Font.draw, Font.drawBox = realDraw, realBox
 T.check(widest <= 160,
   ("the browser box fits the screen (widest %d: %q)"):format(widest, worst))
+
+-- ------- riding ADVANCED
+--
+-- The whole point of the option: a Groovy palette used to REPLACE the
+-- richest colorization the engine has with four shades. These assert it
+-- now rides it instead -- and count the colours, because "it looks more
+-- colourful" is not something a test can be trusted to feel.
+
+do
+  local pack = PaletteFX.gbcPack()
+  if not pack then
+    T.check(true, "no pokered-gbc pack here, ADVANCED checks skipped")
+  else
+    local tileset = next(pack.world.groupColors)
+    local groovy = exports.palettes()[1].id
+
+    local function distinct(groups)
+      local seen, n = {}, 0
+      for _, palette in ipairs(groups) do
+        for _, c in ipairs(palette) do
+          local k = ("%d,%d,%d"):format(c[1], c[2], c[3])
+          if not seen[k] then seen[k] = true; n = n + 1 end
+        end
+      end
+      return n
+    end
+
+    -- the baseline ADVANCED itself resolves
+    PaletteFX.setMode("redpp")
+    local vanilla = PaletteFX.worldGroupColors(Data, tileset, nil, nil)
+    T.check(vanilla ~= nil and #vanilla == 8,
+      "ADVANCED resolves eight background palettes at once")
+    local vanillaCount = distinct(vanilla)
+    T.check(vanillaCount > 4,
+      ("and more than four colours in them (%d)"):format(vanillaCount))
+
+    -- a Groovy palette must now take that same path...
+    PaletteFX.setMode(groovy)
+    T.check(PaletteFX.usesGbcPack(),
+      "a Groovy palette takes the ADVANCED path while USE ADVANCED is on")
+
+    -- ...and keep the variety rather than flattening it to four
+    local ridden = PaletteFX.worldGroupColors(Data, tileset, nil, nil)
+    T.eq(#ridden, 8, "still eight palettes")
+    local riddenCount = distinct(ridden)
+    T.check(riddenCount > 4,
+      ("the palette keeps ADVANCED's variety (%d colours, not 4)"):format(riddenCount))
+
+    -- and it must actually be RECOLOURED, not passed through untouched
+    local changed = false
+    for i, palette in ipairs(ridden) do
+      for j, c in ipairs(palette) do
+        local v = vanilla[i][j]
+        if c[1] ~= v[1] or c[2] ~= v[2] or c[3] ~= v[3] then changed = true end
+      end
+    end
+    T.check(changed, "and it is recoloured, not merely passed through")
+
+    -- the bake cache must not serve one palette's atlas for another
+    local keyA = PaletteFX.darkKey()
+    PaletteFX.setMode(exports.palettes()[2].id)
+    T.check(PaletteFX.darkKey() ~= keyA,
+      "two palettes bake under different cache keys")
+
+    -- USE ADVANCED = OFF is checked in the second pass below, where the
+    -- option can actually be stored off before the mod loads
+  end
+end
 
 PaletteFX.mode = before
 run.release()

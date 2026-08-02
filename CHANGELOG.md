@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.3.0
+
+- **`USE ADVANCED`** (TINT) — the palettes now ride the engine's **ADVANCED**
+  colorization instead of replacing it.
+
+  ADVANCED is not a four-shade mode: it is the pokered-gbc pack, which
+  resolves a real colour *per tile* and keeps **eight background palettes
+  live at once**. Picking RAINBOW used to switch that off and hand you four
+  shades — measurably a downgrade.
+
+  A four-rung ramp can be read as a *curve* rather than four steps: take
+  each colour's luminance, find that height on the ramp, interpolate
+  between the two rungs it falls between. Counted on the real pack, on a
+  house interior:
+
+  | | on screen | across the game |
+  | --- | --- | --- |
+  | ADVANCED | 18 | 47 |
+  | RAINBOW, before | 4 | 4 |
+  | **RAINBOW, riding ADVANCED** | **18** | **47** |
+
+  Nothing is collapsed — the counts match ADVANCED's exactly. And the
+  source's own hue distinctions survive: a green tile still reads greener
+  than a red one, both pulled into the palette's family.
+
+  | | |
+  | --- | --- |
+  | `TINT` | keep ADVANCED's colour, pull it toward the palette (default) |
+  | `FULL` | all the way onto the ramp, but along the curve |
+  | `OFF` | what 0.2.0 did — four shades, ADVANCED replaced |
+
+  Installs without the pokered-gbc pack fall back to `OFF` on their own.
+
 ## 0.2.0
 
 - **A live palette browser on the START menu.** `START → PALETTE` scrolls
