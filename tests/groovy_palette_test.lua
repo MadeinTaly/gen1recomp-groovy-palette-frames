@@ -44,6 +44,12 @@ if os.getenv("GROOVY_PALETTE_BROWSER_OFF") then
   for _, e in ipairs(items) do if e.label == "PALETTE" then still = true end end
   T.check(not still, "and adds no start menu row")
 
+  local colorsRow = { id = "colors", label = "COLORS" }
+  require("src.mods.Runtime").call("ui.options.rows",
+    function(_, r) return r end, {}, { colorsRow })
+  T.check(colorsRow.activate == nil,
+    "and leaves the COLORS row exactly as the engine built it")
+
   T.check(#off.loader.exports.groovy_palette.palettes() >= 25,
     "but the palettes stay -- the switch is the browser, not the mod")
 
@@ -200,6 +206,39 @@ do
   T.eq(pushed, "GroovyPaletteBrowser", "and selecting it opens the browser")
 end
 
+-- ------- and from the COLORS row, which is where a player actually is
+--
+-- An options row may carry activate = fn(game), which OptionsMenu calls on
+-- A. The engine's own COLORS row has none, so pressing A there did nothing
+-- -- and choosing a colour from a menu covering the game is choosing it
+-- blind. This attaches one.
+do
+  local Screens = require("src.ui.Screens")
+  local colorsRow = { id = "colors", label = "COLORS",
+                      step = function() return true end }
+  local otherRow = { id = "tilt", label = "TILT" }
+  local out = Runtime.call("ui.options.rows", function(_, r) return r end,
+    {}, { colorsRow, otherRow })
+
+  T.check(type(colorsRow.activate) == "function",
+    "the COLORS row gains an activate, so A does something there")
+  T.check(otherRow.activate == nil, "and no other row is touched")
+  T.check(colorsRow.step ~= nil, "while COLORS still steps with left/right")
+
+  local pushed
+  local realPush = Screens.push
+  Screens.push = function(_, id) pushed = id end
+  pcall(colorsRow.activate, {})
+  Screens.push = realPush
+  T.eq(pushed, "GroovyPaletteBrowser", "and A opens the preview")
+
+  -- a row another mod already claimed is left alone
+  local taken = { id = "colors", activate = function() end }
+  local mine = taken.activate
+  Runtime.call("ui.options.rows", function(_, r) return r end, {}, { taken })
+  T.check(taken.activate == mine, "an activate another mod set is not stolen")
+end
+
 PaletteFX.setMode("gbc")
 local pressed, closed = {}, false
 local game = {
@@ -216,6 +255,29 @@ T.eq(browser.isOpaque, false, "the screen is NOT opaque, so the game draws behin
 -- the engine read save.options.colors rather than PaletteFX.mode
 pressed = { down = true }; browser:update()
 T.check(PaletteFX.mode ~= "gbc", "moving the cursor changes the live palette")
+
+-- left/right is what the player asked for and what the COLORS row uses, so
+-- it has to walk the list too -- and in the same directions
+-- self-contained: it drives the palette as a side effect, and the
+-- assertions after this one depend on where the one above left it
+do
+  local wasMode = PaletteFX.mode
+  local wasOption = game.save.options.colors
+
+  local probe = factory.new(game)
+  local start = probe.index
+  pressed = { right = true }; probe:update()
+  local afterRight = probe.index
+  pressed = { left = true }; probe:update()
+  T.check(afterRight ~= start, "RIGHT walks the list")
+  T.eq(probe.index, start, "and LEFT walks back the same step")
+  pressed = { down = true }; probe:update()
+  T.eq(probe.index, afterRight, "DOWN still agrees with RIGHT")
+
+  PaletteFX.setMode(wasMode)
+  game.save.options.colors = wasOption
+end
+pressed = { down = true }
 T.eq(game.save.options.colors, PaletteFX.mode, "and the saved option follows it")
 local previewed = PaletteFX.mode
 

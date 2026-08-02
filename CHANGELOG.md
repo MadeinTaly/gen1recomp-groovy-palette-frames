@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.5.0
+
+- **The preview is now where you actually choose a colour.** Press **A** on
+  the game's own **OPTION → COLORS** row and the menu lifts off: the running
+  game, the palette's name, nothing else. **Left/right** walks the list,
+  **A** keeps, **B** puts back the one you arrived with.
+
+  Choosing a colour from a menu that is covering the game is choosing it
+  blind, and COLORS is exactly where a player goes to do it. The browser
+  existed since 0.2.0 but only from `START → PALETTE`, which is not where
+  anyone looks.
+
+  An options row descriptor may carry `activate = fn(game)` — `OptionsMenu`
+  calls it on A — and the rows run through the `ui.options.rows` hook before
+  the menu is built. So this attaches one to the row the *engine* owns. The
+  row still steps with left/right exactly as it did; A simply does something
+  now where it used to do nothing. A row another mod has already claimed is
+  left alone.
+
+- **Left and right** work in the browser, not just up and down. It is
+  reached from a row that steps with left/right, so the gesture carries on
+  meaning the same thing.
+
+- **The browser shows the palette name and nothing else.** The
+  `A:KEEP B:CANCEL` line cost a third of the box for something you need
+  once, and every pixel of chrome is a pixel of the thing being previewed
+  that you cannot see. The box that remains is sized to the word rather than
+  the screen — it cannot go entirely, because a glyph is one shade over a
+  world drawn in four, and bare text would be unreadable over a busy map in
+  exactly the palettes worth looking at.
+
+- `START MENU` is now labelled **`PREVIEW`**, since it governs both ways in.
+  Off removes the START row, the COLORS `activate`, and the screen; the
+  palettes stay. Your stored setting carries over — the key is unchanged.
+
 ## 0.4.1
 
 - **Fixed: `FRAME` needed a restart.** Choosing a border did nothing until

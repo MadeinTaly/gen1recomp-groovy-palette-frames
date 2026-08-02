@@ -21,12 +21,22 @@ file.
 
 ## Use
 
-**START → PALETTE.** Up and down walk the list; the game keeps drawing
-behind it, so you are looking at Pallet Town in the palette rather than at a
-menu covering it. **A** keeps it, **B** puts back the one you arrived with.
+**OPTION → COLORS, then press A.** The menu lifts off and you are looking at
+the running game with the palette's name over it and nothing else.
 
-The game's own **OPTION → COLORS** row and hotkey `2` still work and still
-cycle the same list.
+| | |
+| --- | --- |
+| **← →** | walk the list (**↑ ↓** work too) |
+| **A** | keep this one |
+| **B** | put back the one you arrived with |
+
+Choosing a colour from a menu that is covering the game is choosing it
+blind. The row itself still steps with left/right without opening anything,
+so nothing you already do has changed — A just does something now where it
+used to do nothing.
+
+**START → PALETTE** opens the same screen mid-game, and hotkey `2` still
+cycles the list.
 
 **START → MODS → Groovy Palette → OPTIONS..**
 
@@ -34,7 +44,7 @@ cycle the same list.
 | --- | --- | --- | --- |
 | `FRAME` | `GAME BOY` + eight | at once | the border on every text box and menu — see below |
 | `USE ADVANCED` | `TINT` / `FULL` / `OFF` | at once | ride the engine's per-tile colour instead of replacing it — see below |
-| `START MENU` | on / off | next launch | the browser above; off removes the row and the screen and leaves the palettes |
+| `PREVIEW` | on / off | next launch | both ways into the browser above; off removes the START row, the A on COLORS and the screen, and leaves the palettes |
 | `PACKS` | `ALL` / `RETRO` / `COLOUR` | next launch | all thirty, the twelve that are somebody's real hardware, or the eighteen invented ones |
 
 The last two are read once, when the mod loads: one builds the COLORS list
