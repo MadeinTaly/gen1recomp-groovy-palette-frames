@@ -17,16 +17,27 @@ file.
 
 ## Use
 
-The game's own **OPTION → COLORS** row, or hotkey `2`.
+**START → PALETTE.** Up and down walk the list; the game keeps drawing
+behind it, so you are looking at Pallet Town in the palette rather than at a
+menu covering it. **A** keeps it, **B** puts back the one you arrived with.
 
-Thirty extra rungs is a long walk one press at a time, so
-**START → MODS → Groovy Palette → OPTIONS.. → PACKS** narrows it:
+The game's own **OPTION → COLORS** row and hotkey `2` still work and still
+cycle the same list.
 
-| `PACKS` | |
-| --- | --- |
-| `ALL` | all thirty |
-| `RETRO` | the twelve that are somebody's real hardware |
-| `COLOUR` | the eighteen invented ones |
+**START → MODS → Groovy Palette → OPTIONS..**
+
+| Row | Values | Meaning |
+| --- | --- | --- |
+| `START MENU` | on / off | the browser above; off removes the row and the screen and leaves the palettes |
+| `PACKS` | `ALL` / `RETRO` / `COLOUR` | all thirty, the twelve that are somebody's real hardware, or the eighteen invented ones |
+
+## Why the browser is not a grid of swatches
+
+A swatch cannot tell you what a palette does. The engine colorises at
+composite time — the finished 160×144 frame goes through a shade-remap — so
+a screen that declares itself non-opaque leaves the map, your sprite and the
+text box drawing underneath and gets recoloured along with them. Scrolling
+the list *is* the preview, at full size, on the real picture.
 
 ## What is in it
 

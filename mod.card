@@ -8,6 +8,8 @@ return {
   differences = {
     added = {
       "thirty palettes appended to the engine's own COLORS row, cycled by the same option and the same hotkey",
+      "START -> PALETTE, a browser that scrolls the list over the running game: the screen is not opaque, so colorisation recolours the actual frame rather than a swatch",
+      "START MENU, which removes that browser and leaves the palettes",
       "PACKS, narrowing them to the twelve hardware ones or the eighteen invented ones",
     },
     changed = {
