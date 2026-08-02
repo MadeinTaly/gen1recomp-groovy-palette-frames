@@ -1,13 +1,13 @@
 {
   "id": "groovy_palette",
-  "name": "Groovy Palette",
-  "version": "0.3.0",
+  "name": "Groovy Palette & Frames",
+  "version": "0.4.0",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
   "category": "GRAPHICS",
   "game_version": ">=0.0.0-0 <2.0.0",
-  "github": "MadeinTaly/gen1recomp-groovy-palette",
+  "github": "MadeinTaly/gen1recomp-groovy-palette-frames",
   "priority": 100,
   "dependencies": [],
   "optional_dependencies": [],
@@ -15,5 +15,5 @@
   "permissions": [
     "engine_internals"
   ],
-  "description": "Thirty more entries on the COLORS row: Amiga Workbench, the C64 boot screen, a Virtual Boy, an amber terminal, plus rainbow, fuchsia, vaporwave and the rest. USE ADVANCED rides the engine's per-tile colorization instead of replacing it, so a palette recolours eighteen colours on screen rather than flattening them to four. A START menu browser scrolls the list over the running game. PACKS narrows it to RETRO or COLOUR."
+  "description": "Thirty more entries on the COLORS row -- Amiga Workbench, the C64 boot screen, a Virtual Boy, rainbow, fuchsia, vaporwave -- plus eight new borders for every text box and menu. USE ADVANCED rides the engine's per-tile colorization instead of replacing it, so a palette recolours eighteen colours on screen rather than flattening them to four. A START menu browser scrolls the palettes over the running game."
 }

@@ -1,6 +1,6 @@
 -- Human-facing metadata: tooling and the manager's detail pane read this.
 return {
-  summary = "Thirty more COLORS palettes: Amiga, C64, Virtual Boy, rainbow, fuchsia, vaporwave.",
+  summary = "Thirty more COLORS palettes and eight new text-box borders: Amiga, C64, Virtual Boy, rainbow, vaporwave.",
   author = "MadeinTaly",
   support = "https://linktr.ee/made_in_taly",
   tags = { "cosmetic", "ui", "palette", "retro" },
@@ -8,6 +8,7 @@ return {
   differences = {
     added = {
       "thirty palettes appended to the engine's own COLORS row, cycled by the same option and the same hotkey",
+      "FRAME: eight new borders for every text box and menu, drawn as a glyph page of this mod's own and pointed at through Font.BORDER, plus GAME BOY for the engine's six",
       "USE ADVANCED, which rides the engine's per-tile colorization instead of replacing it: a palette recolours the eighteen colours ADVANCED puts on screen rather than flattening them to four, by reading its four rungs as a curve indexed by luminance",
       "START -> PALETTE, a browser that scrolls the list over the running game: the screen is not opaque, so colorisation recolours the actual frame rather than a swatch",
       "START MENU, which removes that browser and leaves the palettes",
@@ -21,6 +22,7 @@ return {
       "a palette must fall in brightness or the picture reads inside out, so every one here is checked by luminance rather than by eye; AMIGA had to be reordered away from Workbench's own layout because its orange is brighter than its blue",
       "VBOY is lifted toward white-hot at the top rung: a ramp of saturated reds has too little luminance range to stay legible",
       "disable the mod with one of its palettes saved and the game falls back to SGB rather than breaking -- the id simply stops resolving",
+      "a border is six glyphs and h/v are each shared by two opposite edges, so a rail sits on one set of rows/columns for both -- which makes rounded corners and rippling rails impossible rather than merely hard, and the eight frames here are generated from that rule",
       "the pack appends to PaletteFX.MODES, a plain module array; a future engine release could make that a registry, which would need a rewrite here",
     },
   },
