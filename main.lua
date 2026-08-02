@@ -194,6 +194,10 @@ return function(mod)
         { "RETRO", "retro" },
         { "COLOUR", "colour" },
       } },
+    -- The browser is the point of having thirty of these: choosing a colour
+    -- from a menu that is covering the game is choosing it blind. Off puts
+    -- the mod back to being nothing but extra rungs on the OPTIONS row.
+    { key = "browser", label = "START MENU", type = "toggle", default = true },
   })
 
   local function wanted()
@@ -264,6 +268,158 @@ return function(mod)
       return { PaletteFX.whole(PaletteFX.GRAYS) }
     end
     return originalZones(zones)
+  end
+
+-- The live palette browser.
+--
+-- Thirty-seven entries on a one-press ladder is a bad way to choose a
+-- colour, because the OPTIONS menu is showing you a menu rather than the
+-- game. This walks the same ladder with the world still on screen.
+--
+-- ------- how it shows the game
+--
+-- The state stack draws every state from the highest OPAQUE one upward, so
+-- a screen that declares `isOpaque = false` leaves whatever is beneath it
+-- drawing normally. Setting `PaletteFX.mode` then recolours that, because
+-- colorisation happens at composite time on the finished frame -- not
+-- inside the states, which know nothing about it.
+--
+-- So this is barely a screen at all: it moves an index, writes a module
+-- field, and draws one small box. The preview is the game itself.
+--
+-- ------- cancelling has to actually restore
+--
+-- The mode is live the moment the cursor moves -- that is the whole point --
+-- which means backing out has to put back both the mode AND the saved
+-- option, or a cancelled browse silently becomes a choice the next time
+-- anything reads save.options.colors.
+
+
+local BOX_TILES_W = 20      -- the full 160px width in 8px tiles
+local BOX_TILES_H = 4
+local TEXT_X = 8
+local TEXT_MAX = 160 - TEXT_X * 2
+
+local function newBrowser(game)
+  local Font = require("src.render.Font")
+  local PaletteFX = require("src.render.PaletteFX")
+  local Strings = require("src.core.Strings")
+
+  local function fit(text)
+    text = tostring(text or "")
+    while #text > 1 and Font.width(text) > TEXT_MAX do
+      text = text:sub(1, #text - 1)
+    end
+    return text
+  end
+
+  -- The whole ladder, vanilla modes included: browsing should be able to
+  -- walk back to SGB as easily as it reaches AMIGA, and the engine's own
+  -- seven are the ones a player is most likely to be returning to.
+  local modes = {}
+  for i, id in ipairs(PaletteFX.MODES) do modes[i] = id end
+
+  local opened = PaletteFX.mode or "gbc"
+  local index = 1
+  for i, id in ipairs(modes) do
+    if id == opened then index = i; break end
+  end
+
+  local self = {
+    game = game,
+    -- The reason this screen exists: everything below keeps drawing, so the
+    -- palette is previewed on the actual game rather than on a swatch.
+    isOpaque = false,
+    index = index,
+    opened = opened,
+    openedOption = game.save and game.save.options and game.save.options.colors,
+  }
+
+  local function apply(id)
+    PaletteFX.setMode(id)
+    -- Written as we go, not only on confirm: several parts of the engine
+    -- read save.options.colors rather than PaletteFX.mode, and a preview
+    -- that only half-applied would look different from the same palette
+    -- chosen through OPTIONS.
+    if game.save and game.save.options then game.save.options.colors = id end
+  end
+
+  local function restore()
+    PaletteFX.setMode(self.opened)
+    if game.save and game.save.options then
+      game.save.options.colors = self.openedOption
+    end
+  end
+
+  function self:update()
+    local input = game.input
+    local n = #modes
+    if n == 0 then game.stack:pop(); return end
+
+    if input:wasPressed("up") then
+      self.index = self.index > 1 and self.index - 1 or n
+      apply(modes[self.index])
+    elseif input:wasPressed("down") then
+      self.index = self.index < n and self.index + 1 or 1
+      apply(modes[self.index])
+    elseif input:wasPressed("a") or input:wasPressed("start") then
+      -- keep what is on screen; it is already applied and already saved
+      game.stack:pop()
+    elseif input:wasPressed("b") then
+      restore()
+      game.stack:pop()
+    end
+  end
+
+  function self:draw()
+    local id = modes[self.index]
+    local label = PaletteFX.MODE_LABELS[id] or id or "?"
+
+    -- A box at the TOP: the player is looking at the world, and the world
+    -- is mostly in the middle and lower half of a Gen 1 screen.
+    Font.drawBox(0, 0, BOX_TILES_W, BOX_TILES_H)
+    love.graphics.setColor(0, 0, 0, 1)
+    Font.draw(fit(Strings("%s  %d/%d", label, self.index, #modes)), TEXT_X, 8)
+    Font.draw(fit(Strings("A:KEEP B:CANCEL")), TEXT_X, 18)
+  end
+
+  return self
+end
+
+  -- ------- the live browser
+  --
+  -- A screen that declares isOpaque = false leaves the states beneath it
+  -- drawing, and colorisation happens at composite time on the finished
+  -- frame -- so moving the cursor recolours the actual game rather than a
+  -- swatch. That is the whole feature; the screen itself is an index and a
+  -- label box.
+  --
+  -- It is written inline for the same reason the palette table is: a
+  -- mod-relative `require` does not resolve. modkit VALIDATES clean either
+  -- way, because the screen factory is never called during validation --
+  -- the failure only appears when a player opens the screen, which is the
+  -- worst possible time to find it.
+
+  local browserOn = true
+  do
+    local ok, value = pcall(function() return mod.options:get("browser") end)
+    browserOn = (not ok) or (value ~= false)
+  end
+
+  if browserOn then
+    local SCREEN = "GroovyPaletteBrowser"
+    mod.content.screens:register(SCREEN, { new = function(game)
+      return newBrowser(game)
+    end })
+
+    mod.hooks:wrap("ui.start_menu.items", function(next, game, items)
+      local out = next(game, items)
+      if type(out) ~= "table" then return out end
+      return mod.ui.insertBefore(out, "SAVE", {
+        label = "PALETTE",
+        onSelect = function() mod.ui.push(game, SCREEN) end,
+      })
+    end)
   end
 
   -- Read by another mod through mod.find("groovy_palette").exports.
