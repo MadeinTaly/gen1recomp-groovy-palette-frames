@@ -387,6 +387,74 @@ do
   T.check(Font.BORDER.tl ~= vanillaTl, "pointing the border elsewhere takes")
   for key, code in pairs(Font.DEFAULT_BORDER) do Font.BORDER[key] = code end
   T.eq(Font.BORDER.tl, vanillaTl, "and GAME BOY restores the engine's own")
+
+  -- ------- and it must not need a reboot
+  --
+  -- 0.4.0 applied the frame at load and on game.ready and nowhere else, so
+  -- choosing one did nothing until the next launch. Font.drawBox reads
+  -- Font.BORDER fresh every call, so the only thing missing was somebody
+  -- writing it when the row moved.
+  --
+  -- Driven through the loader's own bus with the event ManagerState:setOption
+  -- emits, rather than by calling applyFrame directly -- calling it directly
+  -- would have passed in 0.4.0 too.
+  do
+    local loader = run.loader
+    local function choose(value)
+      loader.modOptions = loader.modOptions or {}
+      loader.modOptions.groovy_palette = loader.modOptions.groovy_palette or {}
+      loader.modOptions.groovy_palette.frame = value
+      loader.events:emit("mod.options_changed",
+        { mod = "groovy_palette", key = "frame", value = value })
+    end
+
+    choose("thick")
+    T.eq(Font.BORDER.tl, api.frameCodes("thick").tl,
+      "choosing a frame applies it immediately, without a restart")
+
+    choose("beads")
+    T.eq(Font.BORDER.tl, api.frameCodes("beads").tl,
+      "and again when it changes to another")
+
+    choose("gb")
+    T.eq(Font.BORDER.tl, vanillaTl, "and GAME BOY comes back live too")
+
+    -- someone else's option must not drag the border around
+    choose("double")
+    loader.events:emit("mod.options_changed",
+      { mod = "some_other_mod", key = "frame", value = "gb" })
+    T.eq(Font.BORDER.tl, api.frameCodes("double").tl,
+      "another mod's option change is ignored")
+
+    loader.modOptions.groovy_palette.frame = nil
+    for key, code in pairs(Font.DEFAULT_BORDER) do Font.BORDER[key] = code end
+  end
+
+  -- ------- which other rows are live, checked rather than assumed
+  --
+  -- USE ADVANCED is read on every colour lookup rather than cached at load,
+  -- so it should need no restart either. PACKS and START MENU genuinely do:
+  -- one builds the MODES array and the other registers a screen and a menu
+  -- row, both of which happen once. Asserting that here keeps the README
+  -- honest if any of them ever changes.
+  if PaletteFX.gbcPack() then
+    local loader = run.loader
+    loader.modOptions = loader.modOptions or {}
+    loader.modOptions.groovy_palette = loader.modOptions.groovy_palette or {}
+    local store = loader.modOptions.groovy_palette
+
+    PaletteFX.setMode(exports.palettes()[1].id)
+    store.advanced = "tint"
+    local tinted = PaletteFX.worldGroupColors(Data, next(PaletteFX.gbcPack().world.groupColors), nil, nil)
+    store.advanced = "off"
+    T.check(not PaletteFX.usesGbcPack(),
+      "USE ADVANCED takes effect without a restart")
+    store.advanced = "full"
+    local full = PaletteFX.worldGroupColors(Data, next(PaletteFX.gbcPack().world.groupColors), nil, nil)
+    T.check(tinted[1][2][1] ~= full[1][2][1],
+      "and TINT and FULL really differ")
+    store.advanced = nil
+  end
 end
 
 PaletteFX.mode = before

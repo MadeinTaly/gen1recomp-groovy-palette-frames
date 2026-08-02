@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.1
+
+- **Fixed: `FRAME` needed a restart.** Choosing a border did nothing until
+  the next launch.
+
+  `Font.drawBox` does read `Font.BORDER` fresh on every call, so the change
+  is instant the moment something writes it — and nothing did. 0.4.0 applied
+  the frame at load and on `game.ready` and nowhere else. It now also
+  listens for `mod.options_changed`, which `ManagerState:setOption` emits
+  right after storing a value, so the border redraws the very menu you are
+  choosing it in.
+
+  The test drives the loader's own event bus rather than calling the apply
+  function directly — calling it directly would have passed in 0.4.0 too.
+
+- The README now says which rows take effect at once and which wait for the
+  next launch, and the suite asserts it: `FRAME` and `USE ADVANCED` are
+  live, `PACKS` and `START MENU` are read once at load because one builds
+  the COLORS list and the other registers a screen.
+
+- Releases are titled with the mod's **name** rather than its id, so this
+  one reads *Groovy Palette & Frames 0.4.1*. The asset stays
+  `groovy_palette-<version>.zip`: the launcher's updater looks for that
+  exact name, so it follows the id through any rebrand.
+
 ## 0.4.0
 
 Now **Groovy Palette & Frames**. The mod id stays `groovy_palette`, so the

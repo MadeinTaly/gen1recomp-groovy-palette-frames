@@ -688,6 +688,18 @@ end
   -- The page has to be merged and the font loaded before the codes resolve,
   -- so the first apply waits for the game rather than running at load time.
   mod.events:on("game.ready", applyFrame)
+
+  -- ...and again whenever the row moves. Without this the border only
+  -- changed on the next boot: Font.drawBox does read Font.BORDER fresh on
+  -- every call, so the change is instant once something writes it -- but
+  -- nothing did. ManagerState:setOption emits this after storing the value,
+  -- which is the moment to write it.
+  mod.events:on("mod.options_changed", function(ev)
+    if ev and ev.mod == "groovy_palette" and ev.key == "frame" then
+      applyFrame()
+    end
+  end)
+
   applyFrame()
 
   -- Read by another mod through mod.find("groovy_palette").exports.
