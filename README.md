@@ -30,12 +30,17 @@ cycle the same list.
 
 **START → MODS → Groovy Palette → OPTIONS..**
 
-| Row | Values | Meaning |
-| --- | --- | --- |
-| `FRAME` | `GAME BOY` + eight | the border on every text box and menu — see below |
-| `USE ADVANCED` | `TINT` / `FULL` / `OFF` | ride the engine's per-tile colour instead of replacing it — see below |
-| `START MENU` | on / off | the browser above; off removes the row and the screen and leaves the palettes |
-| `PACKS` | `ALL` / `RETRO` / `COLOUR` | all thirty, the twelve that are somebody's real hardware, or the eighteen invented ones |
+| Row | Values | Takes effect | Meaning |
+| --- | --- | --- | --- |
+| `FRAME` | `GAME BOY` + eight | at once | the border on every text box and menu — see below |
+| `USE ADVANCED` | `TINT` / `FULL` / `OFF` | at once | ride the engine's per-tile colour instead of replacing it — see below |
+| `START MENU` | on / off | next launch | the browser above; off removes the row and the screen and leaves the palettes |
+| `PACKS` | `ALL` / `RETRO` / `COLOUR` | next launch | all thirty, the twelve that are somebody's real hardware, or the eighteen invented ones |
+
+The last two are read once, when the mod loads: one builds the COLORS list
+and the other registers a screen and a menu row. The first two are read
+every time they are used, so moving them shows immediately — you can watch
+`FRAME` redraw the very menu you are choosing it in.
 
 ## The frames
 
