@@ -1,0 +1,19 @@
+{
+  "id": "groovy_palette",
+  "name": "Groovy Palette",
+  "version": "0.1.0",
+  "api": 2,
+  "entry": "main.lua",
+  "profile": "content",
+  "category": "GRAPHICS",
+  "game_version": ">=0.0.0-0 <2.0.0",
+  "github": "MadeinTaly/gen1recomp-groovy-palette",
+  "priority": 100,
+  "dependencies": [],
+  "optional_dependencies": [],
+  "conflicts": [],
+  "permissions": [
+    "engine_internals"
+  ],
+  "description": "Thirty more entries on the COLORS row: Amiga Workbench, the C64 boot screen, a Virtual Boy, an amber terminal, plus rainbow, fuchsia, vaporwave and the rest. PACKS narrows the list to RETRO or COLOUR when thirty extra rungs is too long a walk. Every palette is checked by luminance, because a Game Boy palette that does not fall in brightness reads inside out."
+}
