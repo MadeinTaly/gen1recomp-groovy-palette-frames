@@ -207,6 +207,14 @@ return function(mod)
       } },
     -- The border every text box and menu is drawn with. GAME BOY is the
     -- engine's own; the rest are this mod's, drawn in tools/make_frames.py.
+    -- The clock. See "day and night" below: this tints whatever palette is
+    -- active, the engine's own seven included, rather than replacing it.
+    { key = "daynight", label = "DAY & NIGHT", type = "choice", default = "off",
+      choices = {
+        { "OFF", "off" },
+        { "CLOCK", "clock" },
+        { "STEPS", "steps" },
+      } },
     { key = "frame", label = "FRAME", type = "choice", default = "gb",
       choices = {
         { "GAME BOY", "gb" },
@@ -352,6 +360,107 @@ return function(mod)
     return ramp, amount, how
   end
 
+  -- ------- day and night
+  --
+  -- src/world/OverworldController.lua says it outright: "world.tod default:
+  -- always DAY. A day/night mod returns NIGHT, MORNING, etc.; the result is
+  -- cached on the overworld and handed to map.palette as ctx.tod". The hook
+  -- is re-evaluated on every completed step (onStepComplete), so a clock
+  -- costs nothing until the player moves. Nothing was using it.
+  --
+  -- The period does NOT replace the player's palette. It tints on top of
+  -- it, through the same luminance curve the palettes themselves ride, so
+  -- RAINBOW at midnight is still RAINBOW -- colder and darker. Replacing
+  -- the palette would mean writing save.options.colors on a timer, which is
+  -- how you lose somebody's choice while they are not looking.
+  --
+  -- Each ramp is lightest-first and falls in brightness, the same rule the
+  -- palettes obey, and the suite checks these too.
+
+  local PERIODS = { "MORNING", "DAY", "EVENING", "NIGHT" }
+
+  local TIME_TINT = {
+    -- low sun, cool shadows, a little rose in the light
+    MORNING = { ramp = { { 255, 238, 226 }, { 206, 176, 176 },
+                         { 128, 106, 124 }, { 44, 36, 58 } }, amount = 0.20 },
+    -- noon is the palette as chosen; a tint here would mean the mod is
+    -- never off
+    DAY     = nil,
+    -- the golden hour, and the one people will screenshot
+    EVENING = { ramp = { { 255, 226, 168 }, { 219, 148, 88 },
+                         { 124, 74, 68 }, { 40, 26, 36 } }, amount = 0.34 },
+    -- moonlight is blue because rods do not see red, and a night that only
+    -- darkens reads as a fault in the screen rather than as night
+    NIGHT   = { ramp = { { 188, 202, 238 }, { 116, 132, 190 },
+                         { 56, 68, 118 }, { 14, 16, 40 } }, amount = 0.46 },
+  }
+
+  -- STEPS: one whole day per this many steps walked. 1200 is roughly the
+  -- length of a decent route-and-a-half, so a period turns over often
+  -- enough to notice and rarely enough not to strobe.
+  local STEPS_PER_DAY = 1200
+
+  local function dayNightMode()
+    local ok, value = pcall(function() return mod.options:get("daynight") end)
+    if not ok or value == nil then return "off" end
+    return value
+  end
+
+  local function periodFromClock()
+    local hour = tonumber(os.date("%H")) or 12
+    if hour >= 20 or hour < 5 then return "NIGHT" end
+    if hour < 9 then return "MORNING" end
+    if hour < 17 then return "DAY" end
+    return "EVENING"
+  end
+
+  local function periodFromSteps(steps)
+    local phase = (tonumber(steps) or 0) % STEPS_PER_DAY
+    local quarter = STEPS_PER_DAY / #PERIODS
+    local index = math.floor(phase / quarter) + 1
+    if index > #PERIODS then index = #PERIODS end
+    -- start the walk in daylight rather than at dawn: a new save should
+    -- look like the game it is imitating
+    return PERIODS[(index % #PERIODS) + 1]
+  end
+
+  local currentPeriod = "DAY"
+
+  local function period()
+    local how = dayNightMode()
+    if how == "off" then return "DAY" end
+    return currentPeriod
+  end
+
+  mod.exports.period = period
+  mod.exports.periodFromClock = periodFromClock
+  mod.exports.periodFromSteps = periodFromSteps
+  mod.exports.timeTints = TIME_TINT
+
+  -- Call next() first: another mod may already have an opinion about the
+  -- time, and one that has actually implemented a clock should outrank a
+  -- palette pack guessing from os.date.
+  mod.hooks:wrap("world.tod", function(next, tod, ctx)
+    local out = next(tod, ctx)
+    local how = dayNightMode()
+    if how == "off" then return out end
+    -- someone else moved it off the default; that is their clock, not ours
+    if type(out) == "string" and out ~= "" and out ~= "DAY" and out ~= tod then
+      currentPeriod = out
+      return out
+    end
+    currentPeriod = (how == "steps")
+      and periodFromSteps(ctx and ctx.steps) or periodFromClock()
+    return currentPeriod
+  end)
+
+  local function tintTime(colors)
+    if not colors then return colors end
+    local tint = TIME_TINT[period()]
+    if not tint then return colors end
+    return recolorAll(colors, tint.ramp, tint.amount)
+  end
+
   -- ------- 1. take the ADVANCED code path at all
   --
   -- usesGbcPack is the single gate: TileRenderer, SpriteRenderer and this
@@ -380,11 +489,13 @@ return function(mod)
 
   PaletteFX.worldGroupColors = function(data, tileset, mapId, playerCellY)
     local groups = originalWorld(data, tileset, mapId, playerCellY)
+    if not groups then return groups end
     local ramp, amount = riding()
-    if not (groups and ramp) then return groups end
+    if not (ramp or TIME_TINT[period()]) then return groups end
     local out = {}
     for i, palette in ipairs(groups) do
-      out[i] = recolorAll(palette, ramp, amount)
+      local c = ramp and recolorAll(palette, ramp, amount) or palette
+      out[i] = tintTime(c)
     end
     return out
   end
@@ -397,9 +508,10 @@ return function(mod)
 
   PaletteFX.spriteObp = function(spriteDef, seed)
     local colors, group = originalObp(spriteDef, seed)
+    if not colors then return colors, group end
     local ramp, amount = riding()
-    if not (colors and ramp) then return colors, group end
-    return recolorAll(colors, ramp, amount), group
+    local c = ramp and recolorAll(colors, ramp, amount) or colors
+    return tintTime(c), group
   end
 
   -- ------- 4. do not serve a stale bake
@@ -418,8 +530,12 @@ return function(mod)
   PaletteFX.darkKey = function()
     local base = originalDarkKey()
     local _, _, how = riding()
-    if not how then return base end
-    return base .. "#groovy:" .. tostring(PaletteFX.mode) .. ":" .. how
+    local when = period()
+    if not how and not TIME_TINT[when] then return base end
+    -- the period is in the key for the same reason the palette is: ADVANCED
+    -- bakes its atlas, and dusk and midnight are different pictures
+    return base .. "#groovy:" .. tostring(PaletteFX.mode)
+                .. ":" .. tostring(how) .. ":" .. when
   end
 
   -- ------- effectiveColors: substitute our four, then let the original run
@@ -443,11 +559,13 @@ return function(mod)
     local ramp, amount = riding()
     if ramp then
       if not c then return originalColors(c) end
-      return originalColors(recolorAll(c, ramp, amount))
+      return originalColors(tintTime(recolorAll(c, ramp, amount)))
     end
+    -- The time tint applies to ANY palette, the engine's seven included:
+    -- a day/night cycle that only worked on this mod's own colours would
+    -- be a strange thing to own.
     local swap = mine[PaletteFX.mode or ""]
-    if swap then return originalColors(swap) end
-    return originalColors(c)
+    return originalColors(tintTime(swap or c))
   end
 
   -- ------- ensureZones: a forced palette needs a surface to be forced onto

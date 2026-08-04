@@ -3,8 +3,8 @@
 Thirty more entries on the **COLORS** row for
 [Gen1Recomp](https://github.com/bryanthaboi/gen1recomp) — Amiga Workbench,
 the C64 boot screen, a Virtual Boy, an amber terminal, and a pile of colour
-ideas the Game Boy never had — and **eight new borders** for every text box
-and menu.
+ideas the Game Boy never had — **eight new borders** for every text box and
+menu, and a **day/night cycle** that recolours the world as the hours pass.
 
 They join the engine's own lists rather than replacing them: same OPTIONS
 row, same hotkey, and the vanilla seven palettes keep their positions.
@@ -42,6 +42,7 @@ cycles the list.
 
 | Row | Values | Takes effect | Meaning |
 | --- | --- | --- | --- |
+| `DAY & NIGHT` | `OFF` / `CLOCK` / `STEPS` | at once | the world changes colour with the hour — see below |
 | `FRAME` | `GAME BOY` + eight | at once | the border on every text box and menu — see below |
 | `USE ADVANCED` | `TINT` / `FULL` / `OFF` | at once | ride the engine's per-tile colour instead of replacing it — see below |
 | `PREVIEW` | on / off | next launch | both ways into the browser above; off removes the START row, the A on COLORS and the screen, and leaves the palettes |
@@ -51,6 +52,35 @@ The last two are read once, when the mod loads: one builds the COLORS list
 and the other registers a screen and a menu row. The first two are read
 every time they are used, so moving them shows immediately — you can watch
 `FRAME` redraw the very menu you are choosing it in.
+
+## Day and night
+
+`DAY & NIGHT` recolours the world as the hours pass. Morning comes up cool
+and rose, noon is your palette untouched, dusk goes gold, night goes blue
+and deep.
+
+| | |
+| --- | --- |
+| `CLOCK` | your machine's real clock — play at 11pm and Kanto is dark |
+| `STEPS` | a full day every 1200 steps, for playing at 3am in daylight |
+
+**It tints, it does not replace.** RAINBOW at midnight is still RAINBOW,
+colder and darker. Replacing the palette would mean writing your saved
+choice on a timer. It applies to **any** palette, the engine's own seven
+included.
+
+The engine invited this. `src/world/OverworldController.lua`:
+
+> `world.tod` default: always DAY. A day/night mod returns "NIGHT",
+> "MORNING", etc.; the result is cached on the overworld and handed to
+> `map.palette` as `ctx.tod`.
+
+The hook is re-evaluated on every completed step, so the clock costs nothing
+until you move. If another mod already implements time, its answer wins —
+this fills in the silence rather than overruling a real implementation.
+
+Night is blue rather than merely dark on purpose: rods do not see red, and a
+night that only dims reads as a fault in the screen.
 
 ## The frames
 

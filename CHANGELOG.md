@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.6.0 — day and night
+
+**`DAY & NIGHT`: the world now changes colour as the hours pass.** Morning
+comes up cool and rose, noon is your palette untouched, dusk goes gold, and
+night goes blue and deep.
+
+| | |
+| --- | --- |
+| `CLOCK` | your machine's real clock — play at 11pm, Kanto is dark |
+| `STEPS` | a full day every 1200 steps, for playing at 3am in daylight |
+| `OFF` | the default |
+
+**It tints, it does not replace.** RAINBOW at midnight is still RAINBOW —
+colder and darker. The alternative would have meant writing
+`save.options.colors` on a timer, which is how you lose somebody's choice
+while they are not looking. It works on **any** palette, the engine's own
+seven included: a day/night cycle that only lit up this mod's colours would
+be a strange thing to own.
+
+**Why it was possible at all.** The engine has said so all along, in
+`OverworldController.lua`:
+
+> `world.tod` default: always DAY. A day/night mod returns "NIGHT",
+> "MORNING", etc.; the result is cached on the overworld and handed to
+> `map.palette` as `ctx.tod`.
+
+The hook is re-evaluated on every completed step, so the clock costs nothing
+until you move, and other mods reading `map.palette` now get a real period
+instead of a permanent noon. Nothing was using it.
+
+**It defers to a better clock.** The hook calls through first: a mod that
+has actually implemented time keeps its answer, and this only fills in the
+silence. Guessing from `os.date` should not outrank somebody's real
+implementation.
+
+Night is blue rather than merely dark, on purpose — rods do not see red, and
+a night that only dims reads as a fault in the screen. Each period's ramp
+obeys the same lightest-first rule the palettes do, and the suite checks
+them the same way: get that backwards and the game renders inside out at
+exactly the hour you are least likely to be looking closely.
+
 ## 0.5.0
 
 - **The preview is now where you actually choose a colour.** Press **A** on
