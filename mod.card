@@ -1,6 +1,6 @@
 -- Human-facing metadata: tooling and the manager's detail pane read this.
 return {
-  summary = "Thirty COLORS palettes, eight text-box borders, and a day/night cycle that recolours the world as the hours pass.",
+  summary = "Thirty more COLORS palettes and eight new text-box borders: Amiga, C64, Virtual Boy, rainbow, vaporwave.",
   author = "MadeinTaly",
   support = "https://linktr.ee/made_in_taly",
   tags = { "cosmetic", "ui", "palette", "retro" },
@@ -8,7 +8,6 @@ return {
   differences = {
     added = {
       "thirty palettes appended to the engine's own COLORS row, cycled by the same option and the same hotkey",
-      "DAY & NIGHT: the world is recoloured by the hour, on your real clock or by steps walked -- it TINTS whatever palette is active rather than replacing it, so a saved choice is never written on a timer, and it works on the engine's own seven as well as this mod's thirty",
       "FRAME: eight new borders for every text box and menu, drawn as a glyph page of this mod's own and pointed at through Font.BORDER, plus GAME BOY for the engine's six",
       "USE ADVANCED, which rides the engine's per-tile colorization instead of replacing it: a palette recolours the eighteen colours ADVANCED puts on screen rather than flattening them to four, by reading its four rungs as a curve indexed by luminance",
       "A on the engine's own OPTION -> COLORS row lifts the menu off the game and previews the palette on it, name only, left/right to walk the list -- attached through ui.options.rows as an activate on the row the engine owns, so the row still steps exactly as before",
@@ -25,7 +24,6 @@ return {
       "VBOY is lifted toward white-hot at the top rung: a ramp of saturated reds has too little luminance range to stay legible",
       "disable the mod with one of its palettes saved and the game falls back to SGB rather than breaking -- the id simply stops resolving",
       "a border is six glyphs and h/v are each shared by two opposite edges, so a rail sits on one set of rows/columns for both -- which makes rounded corners and rippling rails impossible rather than merely hard, and the eight frames here are generated from that rule",
-      "the day/night tint rides world.tod, which the engine re-evaluates on every completed step; a mod that already implements a clock keeps its answer, because guessing from os.date should not outrank a real implementation",
       "the pack appends to PaletteFX.MODES, a plain module array; a future engine release could make that a registry, which would need a rewrite here",
     },
   },
