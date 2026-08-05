@@ -1,19 +1,5 @@
 # Changelog
 
-## 0.7.0 — the day/night cycle is withdrawn
-
-**0.6.0 added a `DAY & NIGHT` option. It is gone.** If you are on 0.6.0,
-update: this is 0.6.0 minus that feature and nothing else.
-
-Everything else is unchanged — the thirty palettes, the eight frames, the
-preview on `OPTION → COLORS`, and `USE ADVANCED` all behave exactly as they
-did in 0.5.0. No option you had set has moved, and a save that was using
-`DAY & NIGHT` simply stops being tinted by the hour.
-
-Removed by reverting the commit that added it, so nothing is left behind:
-no `world.tod` hook, no period ramps, no time component in the bake cache
-key.
-
 ## 0.5.0
 
 - **The preview is now where you actually choose a colour.** Press **A** on
