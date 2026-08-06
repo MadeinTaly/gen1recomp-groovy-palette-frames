@@ -190,6 +190,31 @@ zone for modes that *force* a palette rather than tinting the map's own, and
 it names OG / OG INV / CLASSIC explicitly — so a mode missing from that list
 silently does nothing on exactly the screens that expose no SGB data.
 
+## Help wanted — palettes and frames especially
+
+This is the mod where a contribution is smallest and shows up most, because
+the two things it is made of are tiny.
+
+- **A palette is four colours.** Send me four hex values and a name and it
+  can be in the next release. There are thirty; there is room for many more,
+  and the ones people actually want are not the ones I guessed;
+- **A frame is a small piece of pixel art** — six glyphs sharing one
+  horizontal and one vertical rail, which is a real constraint and a fun
+  one. `tools/make_frames.py` draws the eight that ship and will tell you if
+  a design's rails do not line up;
+- **tell me which of the eight to cut.** `WIDE` and `TRACK` are the two I
+  would drop first if they disappoint on a real screen.
+
+Art must be four values: black, `#555555`, `#AAAAAA`, and transparent.
+
+The one hard rule is that anything you send has to be **yours**. No sprites,
+palettes, audio or text lifted from a ROM, a fan game, a wiki or another
+mod — not out of fussiness, but because this whole project stands on not
+redistributing other people's game data, and the other modders on the index
+deserve the same courtesy we would want.
+
+You do not need to know Lua for any of the above.
+
 ## Requirements and legal
 
 Lua source only: no ROM, no ROM-derived data, no game assets. The palettes
