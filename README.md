@@ -190,36 +190,17 @@ zone for modes that *force* a palette rather than tinting the map's own, and
 it names OG / OG INV / CLASSIC explicitly — so a mode missing from that list
 silently does nothing on exactly the screens that expose no SGB data.
 
-## Tell me what to add — and palettes and frames are the easiest thing to send
+## Ideas, and help building them
 
-This is the mod where a contribution is smallest and shows up most.
+**Got an idea for something this should do?** Open an issue — there is a
+template for it. You do not need to know any Lua, and you do not need to
+have worked out how it would be built. Describe what you want and why.
 
-- **A palette is four colours.** Send four hex values and a name. There are
-  thirty and there is room for many more, and the ones people actually want
-  are not the ones I guessed;
-- **A frame is six glyphs** sharing one horizontal and one vertical rail —
-  a real constraint and a fun one. `tools/make_frames.py` draws the eight
-  that ship and will tell you if a design's rails do not line up.
+**Want to build it yourself?** Open a pull request. Collaboration is welcome
+on any part of this.
 
-And beyond that, ideas for what the mod should *do*:
-
-- **palettes that change with where you are** — a different one for caves,
-  for the sea, for night;
-- **a palette editor in game**, so people make their own instead of asking;
-- **matching frames to palettes**, so picking one theme sets both;
-- **something else** — this mod is pure decoration and decoration has no
-  ceiling.
-
-Art must be four values: black, `#555555`, `#AAAAAA`, and transparent.
-
-**Ideas are the contribution.** You do not have to build it, mock it up or
-know Lua — describe what you want and why, and it gets considered. The best
-ones ship.
-
-If an idea comes with art, the art has to be **yours**: nothing traced,
-edited or recoloured from a ROM, a fan game, a wiki or another mod. That is
-what keeps this shippable, and it is what the other authors on the index are
-owed.
+Anything you send that includes art has to be your own work — nothing
+traced, edited or recoloured from a ROM, a fan game, a wiki or another mod.
 
 ## Requirements and legal
 
