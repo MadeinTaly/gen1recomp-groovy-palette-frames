@@ -1,0 +1,43 @@
+name: Send a palette or a frame
+description: Four colours, or six glyphs. The smallest contribution there is.
+title: "[art] "
+labels: ["art", "idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A palette is **four colours**. A frame is **six glyphs** sharing one
+        horizontal and one vertical rail. Either one can be in the next
+        release the day you send it.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Which is it?
+      options: ["A palette (four colours)", "A frame (a border design)"]
+    validations:
+      required: true
+  - type: input
+    id: name
+    attributes:
+      label: What is it called?
+      description: Shown on the COLORS or FRAME row, so keep it short and shoutable.
+    validations:
+      required: true
+  - type: textarea
+    id: content
+    attributes:
+      label: The colours, or the design
+      description: >
+        For a palette: four hex values, lightest to darkest. For a frame: a
+        sketch, a PNG, or just a description - `tools/make_frames.py` is
+        where it gets drawn, and it checks that the rails line up.
+      placeholder: "#E8F8D0  #88C070  #346856  #081820"
+    validations:
+      required: true
+  - type: checkboxes
+    id: origin
+    attributes:
+      label: Where it came from
+      options:
+        - label: This is mine, or it is a colour scheme nobody owns (an old machine's screen, a flag, a sunset). Not lifted from a ROM, a fan game or another mod.
+          required: true

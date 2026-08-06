@@ -190,30 +190,36 @@ zone for modes that *force* a palette rather than tinting the map's own, and
 it names OG / OG INV / CLASSIC explicitly — so a mode missing from that list
 silently does nothing on exactly the screens that expose no SGB data.
 
-## Help wanted — palettes and frames especially
+## Tell me what to add — and palettes and frames are the easiest thing to send
 
-This is the mod where a contribution is smallest and shows up most, because
-the two things it is made of are tiny.
+This is the mod where a contribution is smallest and shows up most.
 
-- **A palette is four colours.** Send me four hex values and a name and it
-  can be in the next release. There are thirty; there is room for many more,
-  and the ones people actually want are not the ones I guessed;
-- **A frame is a small piece of pixel art** — six glyphs sharing one
-  horizontal and one vertical rail, which is a real constraint and a fun
-  one. `tools/make_frames.py` draws the eight that ship and will tell you if
-  a design's rails do not line up;
-- **tell me which of the eight to cut.** `WIDE` and `TRACK` are the two I
-  would drop first if they disappoint on a real screen.
+- **A palette is four colours.** Send four hex values and a name. There are
+  thirty and there is room for many more, and the ones people actually want
+  are not the ones I guessed;
+- **A frame is six glyphs** sharing one horizontal and one vertical rail —
+  a real constraint and a fun one. `tools/make_frames.py` draws the eight
+  that ship and will tell you if a design's rails do not line up.
+
+And beyond that, ideas for what the mod should *do*:
+
+- **palettes that change with where you are** — a different one for caves,
+  for the sea, for night;
+- **a palette editor in game**, so people make their own instead of asking;
+- **matching frames to palettes**, so picking one theme sets both;
+- **something else** — this mod is pure decoration and decoration has no
+  ceiling.
 
 Art must be four values: black, `#555555`, `#AAAAAA`, and transparent.
 
-The one hard rule is that anything you send has to be **yours**. No sprites,
-palettes, audio or text lifted from a ROM, a fan game, a wiki or another
-mod — not out of fussiness, but because this whole project stands on not
-redistributing other people's game data, and the other modders on the index
-deserve the same courtesy we would want.
+**Ideas are the contribution.** You do not have to build it, mock it up or
+know Lua — describe what you want and why, and it gets considered. The best
+ones ship.
 
-You do not need to know Lua for any of the above.
+If an idea comes with art, the art has to be **yours**: nothing traced,
+edited or recoloured from a ROM, a fan game, a wiki or another mod. That is
+what keeps this shippable, and it is what the other authors on the index are
+owed.
 
 ## Requirements and legal
 
