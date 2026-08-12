@@ -1,7 +1,7 @@
 {
   "id": "groovy_palette",
   "name": "Groovy Palette & Frames",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "api": 2,
   "games": [
     "gen1",
@@ -19,5 +19,5 @@
   "permissions": [
     "engine_internals"
   ],
-  "description": "Thirty more entries on the COLORS row -- Amiga Workbench, the C64 boot screen, a Virtual Boy, rainbow, fuchsia, vaporwave -- plus eight new borders for every text box and menu. Press A on OPTION -> COLORS and the menu lifts off the game: the palette name and nothing else, left and right to walk the list, previewed on the running game. USE ADVANCED rides the engine per-tile colorization instead of replacing it, so a palette recolours eighteen colours on screen rather than four. On Gold the FRAME half works the same way -- Gold draws its boxes through the same Font.drawBox this mod rewrites the border codes for -- while the palettes stay Gen 1, because Gold is a CGB game whose colour comes from its own palettes and its OPTION menu has no palette row at all."
+  "description": "Thirty more entries on the COLORS row -- Amiga Workbench, the C64 boot screen, a Virtual Boy, rainbow, fuchsia, vaporwave -- plus eight new borders for every text box and menu. Press A on OPTION -> COLORS (or, on Gold, OPTION -> COLOR) and the menu lifts off the game: the palette name and nothing else, left and right to walk the list, previewed on the running game. USE ADVANCED rides the engine's own per-tile colorization instead of replacing it -- the pokered-gbc pack on Red/Blue/Yellow, Gold's own GBC palettes on Gold -- so a palette recolours dozens of colours on screen rather than four. The FRAME half works identically on both generations, through the same Font.drawBox both draw their boxes with; the palette half now does too, riding Gold's own GbcPalette.resolve the same way it rides PaletteFX.effectiveColors on Gen 1. The one gap: Gold's title screen and Gold/Silver boot cinema keep their own pre-rendered art (the same boundary its DMG and CLASSIC color modes already live with) and pick up the scheme from the first menu or map onward."
 }

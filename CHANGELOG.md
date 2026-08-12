@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.7.0 — the palettes run on Gold too
+
+0.6.0 shipped believing Gold's OPTION menu "carries no palette row at all".
+That was true of the mechanism this mod already knew — Gen 1's PaletteFX,
+an SGB-style whole-screen remap — but not of Gold's colour in general. Gold's
+own OPTION screen carries a `COLOR` row (`src/ui/gen2/OptionsMenu.lua:152`)
+that already switches between three modes of its own, `GBC` / `DMG` /
+`CLASSIC`, through `src/render/GbcPalette.lua` — Gold's direct equivalent of
+PaletteFX, and the one seam its own module comment says every colour in the
+Gen 2 port arrives through. That is where this mod's thirty schemes plug in
+now.
+
+- **The palettes work on Gold.** The same thirty ids are appended to
+  `GbcPalette.MODES` alongside `PaletteFX.MODES`, and `GbcPalette.resolve`
+  is wrapped the same way `effectiveColors` is on Gen 1. `PALETTE` on the
+  START menu, and `A` on `OPTION → COLOR`, open the same live preview screen
+  Red/Blue/Yellow have always had — the screen now reads `game.save
+  .generation` to decide which of the two engine modules to drive, and
+  writes the save option under whichever key that generation actually uses
+  (`colors` on Gen 1, `color` on Gen 2).
+
+- **USE ADVANCED rides Gold's own colour, not a stand-in for it.** Gold never
+  works from four bare shades — every call into `GbcPalette.resolve` already
+  carries a real palette (one of eight background groups, one of eight
+  overworld sprite groups, a Pokémon's or trainer's own shipped pair, an HP
+  or EXP bar colour) — so `TINT`/`FULL` bend each of those toward the scheme
+  along the same luminance curve the Gen 1 ADVANCED path uses, rather than
+  flattening dozens of distinct palettes onto one shared four-rung ramp.
+  `OFF` is that flat swap, matching what Gold's own `DMG` and `CLASSIC`
+  modes already do.
+
+- **What still does not move: the title screen and the boot cinema.** Both
+  draw from pre-rendered art rather than through `GbcPalette.resolve` —
+  `TitleState:gray()` already swaps to a grey image set for any COLOR mode
+  but `GBC`, and a groovy scheme lands on that same branch DMG and CLASSIC
+  do. The splash shows grey; the recolour picks up from the first menu or
+  map onward. Named rather than patched around, because patching around it
+  would mean either baking new art (which this mod's own rule against
+  ROM-derived or hand-traced sprite art already forbids) or running the
+  finished frame back through the whole-screen present-pass trick CLASSIC
+  uses, which only works because CLASSIC forces every draw call onto the
+  same four fixed shades first — exactly the flattening TINT/FULL exist to
+  avoid everywhere else.
+
+- **Three palettes tightened for contrast, not repainted.** The test suite
+  now checks WCAG relative-luminance contrast (the web's own text-contrast
+  formula) between every adjacent rung, not just brightness ordering, and
+  requires 1.3 as a floor. AMIGA's grey, CGA's cyan and VAPOR's cyan rung
+  each sat close enough to a neighbour to read as one colour once
+  desaturated by the shade shader; all three moved a little, none changed
+  identity, and every id still resolves to the same *kind* of colour a
+  player who already picked it expects.
+
 ## 0.6.0 — the frames run on Gold
 
 `"games": ["gen1", "gen2"]`. The mod is two halves and they answer Gold

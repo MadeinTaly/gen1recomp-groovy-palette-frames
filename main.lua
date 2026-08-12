@@ -2,8 +2,11 @@
 --
 -- Thirty more entries on the COLORS row: Amiga Workbench, the C64 boot
 -- screen, a Virtual Boy, and a pile of colour ideas the Game Boy never had.
+-- The same thirty play on Gold too, recolouring its own GBC palettes rather
+-- than standing in for a mechanism Gold does not have -- see "Gold: the same
+-- palettes, through the choke point Gold actually has" further down.
 --
--- ------- where these plug in
+-- ------- where these plug in, on Red/Blue/Yellow
 --
 -- COLORS is not a registry. `src/render/PaletteFX.lua` keeps a plain array:
 --
@@ -26,6 +29,12 @@
 -- exposes none -- so the shade-remap shader never runs and the palette
 -- silently does nothing on exactly the screens with no SGB data.
 --
+-- Gold has no equivalent of either function, because it has no equivalent
+-- problem: it is never working from four greys with nothing else to draw
+-- from. `src/render/GbcPalette.lua`'s `resolve` is the one function this mod
+-- wraps there, and that section (further down, next to where it happens) is
+-- where the difference is worth reading in full.
+--
 -- The palette table lives in this file rather than a data/ module on
 -- purpose. modkit runs the validating loader with its cwd at the ENGINE
 -- root, so `require("data.palettes")` searches the engine's data directory
@@ -35,9 +44,11 @@
 -- ------- turning the mod off
 --
 -- A save keeps the mode id. Disable this mod and the id is no longer in
--- MODES, `effectiveColors` falls through its if-chain and returns the map's
--- own colours untouched -- which is SGB, the default. The player loses the
--- palette, never the game.
+-- MODES (PaletteFX's on Gen 1, GbcPalette's on Gen 2), so the resolving
+-- function falls through its if-chain and returns the map's own colours
+-- untouched -- SGB on Gen 1, the cart's own GBC palettes on Gen 2, both the
+-- default either game already had. The player loses the palette, never the
+-- game.
 
 -- ------- the palettes
 --
@@ -52,6 +63,25 @@
 -- `tests/` checks this by luminance on every row here, which is why the set
 -- can be this large without any of them being eyeballed.
 --
+-- ------- the second rule: a rung has to earn its place
+--
+-- Falling in brightness is necessary but not sufficient -- two rungs a
+-- fraction of a shade apart in the eye's own response fall in the right
+-- order and still read as one flat colour once the shader has desaturated
+-- them, which throws away exactly the boundary the four-shade ramp exists to
+-- draw. `tests/` computes the WCAG relative-luminance contrast ratio (the
+-- formula behind the web's text-contrast rule: each channel gamma-corrected
+-- back to linear light before the 0.2126/0.7152/0.0722 weighting, then
+-- (L_light + 0.05) / (L_dark + 0.05)) for every ADJACENT pair in a row --
+-- 1-2, 2-3, 3-4 -- and requires at least 1.3, a deliberately modest floor:
+-- enough that no two neighbouring rungs are visually interchangeable,
+-- without forcing every scheme toward the high-contrast extreme CGA and
+-- SPECCY already sit at on their own. The paper/ink pair (1 and 4, what
+-- Chrome.printThrough in the Gen 2 port and the box text in Gen 1 both
+-- actually draw a glyph over) is held to the web's own AA body-text minimum,
+-- 4.5:1 -- every row here clears it by at least double, because a ramp built
+-- to satisfy the ordering rule above already spans most of the shade range.
+--
 -- Labels are capped at 8 characters: the OPTIONS row draws the value beside
 -- its label on a 160px screen, and every glyph advances 8 pixels.
 local PALETTES = {
@@ -64,8 +94,13 @@ local PALETTES = {
     -- but in Workbench's own order the orange (luminance 151) sits below the
     -- blue (73), so laying them out "as the Amiga had them" produces a ramp
     -- that goes bright, dark, bright, dark and reads inside out.
-    -- Same four colours, ordered by brightness.
-    colors = { {170,170,170}, {255,136,0}, {0,85,170}, {0,0,0} } },
+    -- Same four colours, ordered by brightness. The grey is lifted from
+    -- #AAAAAA to #D2D2D2: WCAG relative luminance (sRGB-linearised, not the
+    -- flat R+G+B the ordering check above uses) put grey against orange at
+    -- a contrast ratio of 1.03 -- next to unity, i.e. two "different" rungs
+    -- that read as the same brightness once desaturated by the shade
+    -- shader. 1.03 -> 1.58 is what buys the boundary back.
+    colors = { {210,210,210}, {255,136,0}, {0,85,170}, {0,0,0} } },
 
   { id = "amiga_dp", label = "DPAINT",
     -- Deluxe Paint's default ramp -- cooler, and the one every Amiga demo
@@ -81,8 +116,12 @@ local PALETTES = {
     colors = { {255,255,255}, {0,204,204}, {204,0,204}, {0,0,0} } },
 
   { id = "cga", label = "CGA",
-    -- Palette 1 high intensity: white, cyan, magenta, black.
-    colors = { {255,255,255}, {85,255,255}, {255,85,255}, {0,0,0} } },
+    -- Palette 1 high intensity: white, cyan, magenta, black. The cyan is
+    -- deepened from #55FFFF (WCAG contrast 1.23 against white, the same
+    -- near-unity collision AMIGA had) to #3CE6E6, splitting the gap toward
+    -- magenta roughly evenly (1.54 against white, 1.71 against magenta)
+    -- instead of leaving one boundary flat and the other doing all the work.
+    colors = { {255,255,255}, {60,230,230}, {255,85,255}, {0,0,0} } },
 
   { id = "apple2", label = "APPLE II",
     colors = { {200,255,200}, {80,220,110}, {30,130,60}, {8,32,16} } },
@@ -145,7 +184,11 @@ local PALETTES = {
 
   { id = "vapor", label = "VAPOR",
     -- Vaporwave: the pink-and-cyan pairing, darkened into a usable ramp.
-    colors = { {245,225,255}, {120,220,235}, {200,80,180}, {45,20,70} } },
+    -- The cyan rung sat at contrast 1.29 against the lilac paper above it --
+    -- below the 1.3 floor this file holds every adjacent pair to -- so it is
+    -- pulled down toward the magenta below it (1.84 against paper, 1.77
+    -- against magenta) rather than left crowding the top of the ramp.
+    colors = { {245,225,255}, {95,185,205}, {200,80,180}, {45,20,70} } },
 
   { id = "neon", label = "NEON",
     colors = { {225,255,90}, {60,230,180}, {200,40,160}, {15,10,35} } },
@@ -198,7 +241,10 @@ return function(mod)
     -- from a menu that is covering the game is choosing it blind. Off puts
     -- the mod back to being nothing but extra rungs on the OPTIONS row.
     { key = "browser", label = "PREVIEW", type = "toggle", default = true },
-    -- See "riding ADVANCED" below. OFF is what 0.2.0 did.
+    -- See "riding ADVANCED" below for Red/Blue/Yellow, and "Gold: the same
+    -- palettes, through the choke point Gold actually has" for what the same
+    -- three settings mean there. OFF is what 0.2.0 did on Gen 1, and the
+    -- plain four-shade swap on Gold.
     { key = "advanced", label = "USE ADVANCED", type = "choice", default = "tint",
       choices = {
         { "TINT", "tint" },
@@ -233,6 +279,9 @@ return function(mod)
   end
 
   local PaletteFX = require("src.render.PaletteFX")
+  -- Gold's answer to PaletteFX -- see "Gold: the same palettes, through the
+  -- choke point Gold actually has" below, where this is put to use.
+  local GbcPalette = require("src.render.GbcPalette")
 
   -- Which ids this mod owns, and the colours behind each. Built once: MODES
   -- is read every time the option row moves, so it has to be a stable array
@@ -470,6 +519,98 @@ return function(mod)
     return originalZones(zones)
   end
 
+  -- ------- Gold: the same palettes, through the choke point Gold actually
+  -- has
+  --
+  -- Gold is a CGB game and its colour genuinely does come from its own
+  -- palettes -- that much of the reasoning this mod shipped with was right.
+  -- What was wrong was concluding there is nothing to plug a palette INTO.
+  -- There is: `src/render/GbcPalette.lua` is Gold's own equivalent of
+  -- PaletteFX, and its module comment says outright that "every colour in
+  -- the Gen 2 port arrives here" (GbcPalette.lua:16-19). `GbcPalette.resolve
+  -- (colors)` is the seam -- it already has three modes of its own (GBC, the
+  -- cart's colours; DMG, the grey Game Boy; CLASSIC, the DMG pea-soup ramp
+  -- run through `presentColors` as a final pass), reached from Gold's own
+  -- OPTION screen's COLOR row (src/ui/gen2/OptionsMenu.lua:152-159). Every
+  -- consumer -- the world (src/world/gen2/World.lua), every menu, the
+  -- Pokedex, the box, the party screen, battle, credits, the naming screen --
+  -- calls `GbcPalette.use` / `.with` / `.color`, all of which run through
+  -- `resolve`, so one wrapper here reaches every one of them the same way
+  -- wrapping `effectiveColors` reaches every Gen 1 screen above.
+  --
+  -- `GbcPalette.setMode` only accepts an id already in `GbcPalette.MODES`
+  -- (falling back to "gbc" otherwise), so appending our ids there --
+  -- mirroring the PaletteFX append above, same ids and labels -- is what
+  -- makes them selectable at all. `GbcPalette.mode` is a bare module field
+  -- with the same identity contract PaletteFX.mode has: uninstall this mod
+  -- and a save pointing at one of our ids is no longer in MODES, so
+  -- `resolve` falls through untouched and the player gets GBC back, not a
+  -- crash.
+  --
+  -- ------- what "riding" means when the whole game is already colour
+  --
+  -- Gen 1's ADVANCED question -- four shades or the pokered-gbc pack's
+  -- eighteen -- does not need asking on Gold, because Gold never has only
+  -- four. `resolve` is called with a real 4-colour palette on every one of
+  -- the eight BG groups, the eight OBJ groups, each Pokemon's own two
+  -- shipped colours, each trainer class's, the HP and EXP bars, the roof
+  -- pair -- dozens of genuinely different palettes a frame, not one. So the
+  -- same curve trick the ADVANCED path uses above is not an upgrade here,
+  -- it is the ONLY sensible behaviour: recolour what each call already is,
+  -- rather than flattening every one of those palettes onto the same four
+  -- rungs and losing the very distinctions Gold spent eight BG groups making.
+  --
+  -- USE ADVANCED is read again rather than a second option, because it
+  -- already asks the right question in different clothes: TINT bends each
+  -- palette's own colours toward the scheme (55%, `BLEND.tint`), FULL goes
+  -- all the way onto the ramp's curve, and OFF is the literal four-shade
+  -- swap -- the same one DMG and CLASSIC already do for their own three
+  -- modes, and the fallback for an install with no shader
+  -- (`GbcPalette.available()` false) to have fallen back to before this mod
+  -- existed. A player who set USE ADVANCED to OFF for the Gen 1 pack gets
+  -- the plain four-shade Gold too, which is the one answer that cannot
+  -- surprise them either way.
+  --
+  -- ------- what this does NOT reach, and why
+  --
+  -- The title screen and the Gold/Silver boot cinema do not call
+  -- `GbcPalette.resolve` at all: `TitleState:gray()` (src/ui/gen2/
+  -- TitleState.lua:183-187) answers `GbcPalette.mode ~= "gbc"` and picks
+  -- between two PRE-RENDERED image sets, `screenColor` and `screenGray`,
+  -- neither of which is a 4-shade texture the shader can remap. That branch
+  -- already exists for DMG and CLASSIC -- a groovy mode lands on it exactly
+  -- as they do, so the boot splash goes flat grey rather than picking up the
+  -- scheme, then resolves normally the moment the world or a menu draws.
+  -- Nothing here tries to patch that: it is the same boundary DMG and
+  -- CLASSIC already live with, not a new one this mod is cutting corners on.
+  if not GbcPalette._groovyPaletteOriginalResolve then
+    GbcPalette._groovyPaletteOriginalResolve = GbcPalette.resolve
+  end
+  local originalResolve = GbcPalette._groovyPaletteOriginalResolve
+
+  for _, p in ipairs(added) do
+    local known = false
+    for _, id in ipairs(GbcPalette.MODES) do
+      if id == p.id then known = true; break end
+    end
+    if not known then
+      GbcPalette.MODES[#GbcPalette.MODES + 1] = p.id
+      GbcPalette.MODE_LABELS[p.id] = p.label
+    end
+  end
+
+  GbcPalette.resolve = function(colors)
+    local ramp = mine[GbcPalette.mode or ""]
+    if not ramp then return originalResolve(colors) end
+    local how = advancedMode()
+    if how == "off" or not colors then
+      -- the flat swap: what DMG and CLASSIC already do for their own three
+      -- modes when there is nothing (or nothing wanted) to bend toward
+      return ramp
+    end
+    return recolorAll(colors, ramp, BLEND[how] or BLEND.tint)
+  end
+
 -- The live palette browser.
 --
 -- Thirty-seven entries on a one-press ladder is a bad way to choose a
@@ -502,8 +643,26 @@ local TEXT_MAX = 160 - TEXT_X * 2
 
 local function newBrowser(game)
   local Font = require("src.render.Font")
-  local PaletteFX = require("src.render.PaletteFX")
-  local Strings = require("src.core.Strings")
+
+  -- Which module actually resolves the active id into colours, and which
+  -- key on save.options carries it, are the only two things that differ
+  -- between the generations -- everything below (the index, the box, the
+  -- restore-on-cancel logic) is generation-agnostic once those are settled.
+  -- PaletteFX and GbcPalette share the same shape on purpose (MODES,
+  -- MODE_LABELS, mode, setMode(id)) -- see "Gold: the same palettes, through
+  -- the choke point Gold actually has" above -- so one screen walks either
+  -- ladder without knowing which one it is on.
+  --
+  -- The option key differs because the two mechanisms are different things
+  -- wearing similar clothes: Gen 1's `colors` is an SGB-style whole-screen
+  -- pack id (src/core/SaveData.lua), Gen 2's `color` is GbcPalette.MODES
+  -- (src/core/gen2/Save.lua DEFAULT_OPTIONS), and sharing the flat key
+  -- across generations would have each game quietly reinterpreting the
+  -- other's save value.
+  local isGen2 = game and game.save and game.save.generation == 2
+  local Backend = isGen2 and require("src.render.GbcPalette")
+    or require("src.render.PaletteFX")
+  local optionKey = isGen2 and "color" or "colors"
 
   local function fit(text)
     text = tostring(text or "")
@@ -514,12 +673,13 @@ local function newBrowser(game)
   end
 
   -- The whole ladder, vanilla modes included: browsing should be able to
-  -- walk back to SGB as easily as it reaches AMIGA, and the engine's own
-  -- seven are the ones a player is most likely to be returning to.
+  -- walk back to GBC (or SGB, on Gen 1) as easily as it reaches AMIGA, and
+  -- the engine's own modes are the ones a player is most likely to be
+  -- returning to.
   local modes = {}
-  for i, id in ipairs(PaletteFX.MODES) do modes[i] = id end
+  for i, id in ipairs(Backend.MODES) do modes[i] = id end
 
-  local opened = PaletteFX.mode or "gbc"
+  local opened = Backend.mode or "gbc"
   local index = 1
   for i, id in ipairs(modes) do
     if id == opened then index = i; break end
@@ -532,22 +692,22 @@ local function newBrowser(game)
     isOpaque = false,
     index = index,
     opened = opened,
-    openedOption = game.save and game.save.options and game.save.options.colors,
+    openedOption = game.save and game.save.options and game.save.options[optionKey],
   }
 
   local function apply(id)
-    PaletteFX.setMode(id)
+    Backend.setMode(id)
     -- Written as we go, not only on confirm: several parts of the engine
-    -- read save.options.colors rather than PaletteFX.mode, and a preview
+    -- read save.options[optionKey] rather than Backend.mode, and a preview
     -- that only half-applied would look different from the same palette
     -- chosen through OPTIONS.
-    if game.save and game.save.options then game.save.options.colors = id end
+    if game.save and game.save.options then game.save.options[optionKey] = id end
   end
 
   local function restore()
-    PaletteFX.setMode(self.opened)
+    Backend.setMode(self.opened)
     if game.save and game.save.options then
-      game.save.options.colors = self.openedOption
+      game.save.options[optionKey] = self.openedOption
     end
   end
 
@@ -577,7 +737,7 @@ local function newBrowser(game)
 
   function self:draw()
     local id = modes[self.index]
-    local label = fit(PaletteFX.MODE_LABELS[id] or id or "?")
+    local label = fit(Backend.MODE_LABELS[id] or id or "?")
 
     -- The name and nothing else. The point of the screen is the game behind
     -- it, so every pixel of chrome is a pixel of the thing being previewed
@@ -625,14 +785,14 @@ end
     local SCREEN = "GroovyPaletteBrowser"
     -- ------- which generation is running
     --
-    -- Off the live game, never a version allow-list. Gold is a CGB game
-    -- whose colour comes from its own palettes -- src/ui/gen2/OptionsMenu
-    -- .lua:149 says exactly that, and its OPTION menu carries no palette
-    -- row at all. So the palette half of this mod has nothing to act on
-    -- there and the browser would be a screen full of choices that change
-    -- nothing. The FRAME half is a different story and stays on: Gold draws
-    -- its boxes through Chrome.box -> Font.drawBox, which reads the same
-    -- Font.BORDER codes this mod rewrites.
+    -- Off the live game, never a version allow-list -- see "Gold: the same
+    -- palettes, through the choke point Gold actually has" above for why
+    -- this browser has something to preview there too. What still differs
+    -- per generation is cosmetic: which row on OPTION carries `activate`,
+    -- because the two screens spell the row differently (Gen 1's is
+    -- "colors", Gen 2's "color" -- src/ui/gen2/OptionsMenu.lua:152). The
+    -- browser screen itself (`newBrowser`) figures out which backend to
+    -- drive by reading `game.save.generation`, same as this does.
     local function isGen2(game)
       local save = game and game.save
       return save ~= nil and save.generation == 2
@@ -645,33 +805,35 @@ end
     mod.hooks:wrap("ui.start_menu.items", function(next, game, items)
       local out = next(game, items)
       if type(out) ~= "table" then return out end
-      if isGen2(game) then return out end
       return mod.ui.insertBefore(out, "SAVE", {
         label = "PALETTE",
         onSelect = function() mod.ui.push(game, SCREEN) end,
       })
     end)
 
-    -- ------- and from the COLORS row itself, which is where you already are
+    -- ------- and from the COLORS/COLOR row itself, which is where you
+    -- already are
     --
     -- Choosing a colour from a menu that is covering the game is choosing it
-    -- blind, and OPTION -> COLORS is exactly where a player goes to do it.
-    -- An options row descriptor may carry `activate = fn(game)`, which
-    -- OptionsMenu calls on A (src/ui/OptionsMenu.lua: "if row.activate ...
-    -- if input:wasPressed('a')"), and the rows run through this hook before
-    -- the menu is built. So the row keeps stepping with left/right as it
-    -- always did, and A now lifts the menu off the game instead.
+    -- blind, and OPTION -> COLORS (Gen 1) or OPTION -> COLOR (Gen 2) is
+    -- exactly where a player goes to do it. An options row descriptor may
+    -- carry `activate = fn(game)`, which both generations' OptionsMenu call
+    -- on A (src/ui/OptionsMenu.lua and src/ui/gen2/OptionsMenu.lua:315-321,
+    -- "if row.activate ... elseif input:wasPressed('a')"), and the rows run
+    -- through this hook before either menu is built. So the row keeps
+    -- stepping with left/right as it always did, and A now lifts the menu
+    -- off the game instead.
     --
-    -- Attached to the row the ENGINE calls "colors" rather than to one of
-    -- ours, because that is the row the player is on. Left alone if a
-    -- future engine renames it, or if another mod got there first and gave
-    -- it an activate of its own.
+    -- Attached to the row the ENGINE calls "colors" (Gen 1) or "color"
+    -- (Gen 2) rather than to one of ours, because that is the row the
+    -- player is on. Left alone if a future engine renames it, or if another
+    -- mod got there first and gave it an activate of its own.
     mod.hooks:wrap("ui.options.rows", function(next, game, rows)
       local out = next(game, rows)
       if type(out) ~= "table" then return out end
-      if isGen2(game) then return out end
+      local wantId = isGen2(game) and "color" or "colors"
       for _, row in ipairs(out) do
-        if row.id == "colors" and row.activate == nil then
+        if row.id == wantId and row.activate == nil then
           row.activate = function(g) mod.ui.push(g or game, SCREEN) end
         end
       end

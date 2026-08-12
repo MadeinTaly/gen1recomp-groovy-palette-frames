@@ -19,9 +19,32 @@ The **frames** work on Pokémon Gold: it draws its boxes through the same
 option is a separate knob (it picks which of the cart's frame pages is
 current), so the two do not fight.
 
-The **palettes** are Gen 1 only. Gold is a CGB game whose colour comes from its
-own palettes and its OPTION menu has no palette row, so the PALETTE browser and
-the COLORS row takeover switch themselves off there.
+The **palettes** work on Gold too. Gold's colour really does come from its
+own palettes -- that part was always true -- but Gold has a choke point of
+its own that every one of those palettes passes through:
+`src/render/GbcPalette.lua`, whose own comment says outright that "every
+colour in the Gen 2 port arrives here". It already carries three modes
+(`GBC`, `DMG`, `CLASSIC`) reached from Gold's own `OPTION → COLOR` row, and
+this mod appends the same thirty ids there the same way it appends them to
+Gen 1's `COLORS` row, then wraps `GbcPalette.resolve` the way it wraps
+`PaletteFX.effectiveColors`. The `PALETTE` start-menu entry and the browser
+work on Gold exactly as they do on Red/Blue/Yellow -- pressing A on `OPTION →
+COLOR` lifts the same screen over the running game.
+
+Because Gold never has *only* four shades to work with, `USE ADVANCED`
+means something slightly different there: `TINT`/`FULL` bend Gold's own rich
+per-context colours (eight background groups, eight overworld sprite
+groups, every Pokémon and trainer's own pair, the HP and EXP bars) toward the
+scheme along the same curve `riding ADVANCED` uses below, rather than
+flattening them onto four shared rungs; `OFF` is that flat four-shade swap,
+matching what Gold's own `DMG` and `CLASSIC` modes already do.
+
+The one place this does not reach is the title screen and the Gold/Silver
+boot cinema, which draw from **pre-rendered art** rather than through
+`GbcPalette.resolve` -- `TitleState:gray()` swaps to a grey-only image set
+for any COLOR mode but `GBC`, the same branch `DMG` and `CLASSIC` already
+land on. A groovy scheme shows the plain grey splash and picks up the
+recolour from the first menu or map onward.
 
 ## Install
 
@@ -178,6 +201,28 @@ than mid grey, so four saturated reds collapse into mud with barely a third
 of the range they need. The top rung is lifted toward white-hot to buy the
 contrast back without letting another hue in.
 
+Ordering by itself only says a ramp does not read *backwards* — it does not
+say a ramp has any actual contrast to it. Two rungs can fall in the right
+order and still sit close enough in brightness to look like the same colour
+once the shade shader has desaturated them, which is the "flat" failure
+`span < 120` above catches at the paper/ink extremes but not between
+neighbours. So the suite also runs the **WCAG relative-luminance contrast
+ratio** — the same formula behind the web's own text-contrast rule, each
+channel gamma-corrected back to linear light before it is weighted — over
+every adjacent pair (1-2, 2-3, 3-4) in every row, and requires **1.3** as a
+floor: comfortably off "identical" without forcing every scheme toward the
+high-contrast extreme CGA and SPECCY already sit at. The paper/ink pair
+itself (index 1 against index 4 — the exact colours Chrome.printThrough on
+Gold, and this mod's own browser box on either generation, draw a glyph
+over) is held to the web's own body-text AA minimum, **4.5:1**.
+
+Three rows were tightened to clear it, all without changing what the
+scheme *is*: **AMIGA**'s grey lightened from `#AAAAAA` to `#D2D2D2` (it sat
+at 1.03 against the orange next to it — effectively the same brightness
+despite the different hue), **CGA**'s cyan deepened from `#55FFFF` to
+`#3CE6E6`, and **VAPOR**'s cyan rung pulled down from `#78DCEB` to
+`#5FB9CD`.
+
 ## Notes
 
 Four shades is four shades. These recolour the Game Boy's ramp; they do not
@@ -185,8 +230,9 @@ add colours to a scene, and no palette here can show you something the
 original could not draw.
 
 Disable the mod with one of its palettes saved and the game falls back to
-SGB: the id stops resolving and the map's own colours pass through
-untouched. You lose the palette, never the save.
+SGB (Gen 1) or GBC (Gold): the id stops resolving on whichever engine module
+reads it, and the map's own colours pass through untouched either way. You
+lose the palette, never the save.
 
 ## How it works
 
@@ -200,6 +246,14 @@ Two functions need wrapping, not one. `ensureZones` invents a whole-screen
 zone for modes that *force* a palette rather than tinting the map's own, and
 it names OG / OG INV / CLASSIC explicitly — so a mode missing from that list
 silently does nothing on exactly the screens that expose no SGB data.
+
+Gold's own equivalent is `src/render/GbcPalette.lua`. It is not a registry
+either, and it needs no `ensureZones`-shaped counterpart — Gold is never
+working from a bare four greys with nothing else to draw from, so there is
+no "screen with no SGB data" case to invent a zone for. One function does the
+whole job: `GbcPalette.MODES` gets the same ids appended, and
+`GbcPalette.resolve` gets wrapped the same way `effectiveColors` does, riding
+Gold's own colours through the curve trick instead of Gen 1's ADVANCED pack.
 
 ## Ideas, and help building them
 

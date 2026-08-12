@@ -133,6 +133,67 @@ T.eq(#broken, 0, "every palette is a legal ramp (" .. table.concat(broken, "; ")
 T.eq(#flat, 0, "every palette has usable contrast (" .. table.concat(flat, "; ") .. ")")
 T.eq(#longLabel, 0, "every label fits 8 glyphs (" .. table.concat(longLabel, ",") .. ")")
 
+-- ------- contrast, judged the way the web judges it
+--
+-- `span` above is a crude flat-luminance gap; WCAG's relative luminance
+-- gamma-corrects each channel back to linear light before weighting it,
+-- which is what makes two colours that "look" close in raw RGB read as
+-- genuinely close (or genuinely not) to the eye. `contrast` is the ratio
+-- the same spec defines: (lighter + 0.05) / (darker + 0.05).
+--
+-- Two rules, both from that one function:
+--
+--   paper (index 1) vs ink (index 4): >= 4.5, the web's own AA minimum for
+--     body text -- this is the exact pair Chrome.printThrough (Gen 2) and
+--     the box text this mod draws in the browser (Gen 1 and Gen 2 alike)
+--     put a glyph over.
+--   every ADJACENT pair (1-2, 2-3, 3-4): >= 1.3, a floor chosen to be
+--     comfortably above "identical" (1.0) without demanding every scheme
+--     read like a checkerboard -- a pair below it is two rungs a viewer
+--     cannot tell apart once the shade shader has done its job, which is
+--     the "does this read as a deliberate scheme" failure named in the
+--     mod's own goals.
+local function srgbToLinear(v)
+  v = v / 255
+  if v <= 0.03928 then return v / 12.92 end
+  return ((v + 0.055) / 1.055) ^ 2.4
+end
+
+local function relLuminance(c)
+  return 0.2126 * srgbToLinear(c[1]) + 0.7152 * srgbToLinear(c[2])
+       + 0.0722 * srgbToLinear(c[3])
+end
+
+local function contrastRatio(a, b)
+  local La, Lb = relLuminance(a), relLuminance(b)
+  if La < Lb then La, Lb = Lb, La end
+  return (La + 0.05) / (Lb + 0.05)
+end
+
+local ADJACENT_FLOOR, PAPER_INK_FLOOR = 1.3, 4.5
+local weakAdjacent, weakPaperInk = {}, {}
+for _, p in ipairs(list) do
+  if #p.colors == 4 then
+    for i = 1, 3 do
+      local ratio = contrastRatio(p.colors[i], p.colors[i + 1])
+      if ratio < ADJACENT_FLOOR then
+        weakAdjacent[#weakAdjacent + 1] =
+          ("%s rung %d-%d (%.2f)"):format(p.id, i, i + 1, ratio)
+      end
+    end
+    local paperInk = contrastRatio(p.colors[1], p.colors[4])
+    if paperInk < PAPER_INK_FLOOR then
+      weakPaperInk[#weakPaperInk + 1] = ("%s (%.2f)"):format(p.id, paperInk)
+    end
+  end
+end
+T.eq(#weakAdjacent, 0,
+  "every adjacent rung pair clears WCAG contrast " .. ADJACENT_FLOOR
+  .. " (" .. table.concat(weakAdjacent, "; ") .. ")")
+T.eq(#weakPaperInk, 0,
+  "every paper/ink pair clears the web's AA text minimum " .. PAPER_INK_FLOOR
+  .. " (" .. table.concat(weakPaperInk, "; ") .. ")")
+
 -- ------- the engine actually offers them
 
 T.eq(#PaletteFX.MODES, vanillaModes + #list,
@@ -175,6 +236,82 @@ PaletteFX.mode = "a_mode_no_longer_installed"
 local fallback = PaletteFX.effectiveColors(PaletteFX.GRAYS)
 T.eq(fallback[1][1], PaletteFX.GRAYS[1][1],
   "an uninstalled palette id degrades to the map's own colours")
+
+-- ------- the Gen 2 route: the same palettes, reaching Gold
+--
+-- src/render/GbcPalette.lua is Gold's own module-level palette switch, the
+-- direct equivalent of PaletteFX above, and `GbcPalette.MODES` /
+-- `GbcPalette.mode` / `GbcPalette.setMode` are exactly what Gold's own
+-- OPTION -> COLOR row reads and writes (src/ui/gen2/OptionsMenu.lua:152-159,
+-- the row whose `cycle` calls `GbcPalette.setMode` / `.cycle` and whose
+-- `text` calls `GbcPalette.modeLabel`). Asserting against those same
+-- functions -- not a private copy of the mod's own state -- is what proves
+-- the write actually lands where Gold reads it, rather than merely where
+-- this mod remembers it.
+
+local GbcPalette = require("src.render.GbcPalette")
+local gen2VanillaModes = 3 -- gbc, dmg, classic (GbcPalette.MODES before this mod)
+
+T.eq(#GbcPalette.MODES, gen2VanillaModes + #list,
+  "every palette was appended to Gold's own COLOR ladder too")
+T.eq(GbcPalette.MODES[1], "gbc", "Gold's own three modes keep their position")
+T.eq(GbcPalette.MODES[2], "dmg", "and their order")
+T.eq(GbcPalette.MODES[3], "classic", "all three of them")
+
+T.eq(GbcPalette.MODE_LABELS[sample.id], sample.label,
+  "and each carries its label there too")
+
+-- the exact call OPTION -> COLOR's row.text makes
+GbcPalette.setMode(sample.id)
+T.eq(GbcPalette.modeLabel(), sample.label,
+  "GbcPalette.modeLabel -- what the COLOR row actually prints -- sees it")
+
+-- riding: TINT bends Gold's own (richer than four-shade) colours toward the
+-- scheme rather than replacing them, exactly like ADVANCED does on Gen 1
+local richInput = { { 12, 200, 40 }, { 250, 10, 210 }, { 90, 90, 250 }, { 5, 5, 5 } }
+local tinted = GbcPalette.resolve(richInput)
+T.check(tinted[1][1] ~= richInput[1][1] or tinted[1][2] ~= richInput[1][2]
+        or tinted[1][3] ~= richInput[1][3],
+  "TINT (the default) moves Gold's own colours toward the scheme")
+T.check(tinted[1][1] ~= sample.colors[1][1] or tinted[1][2] ~= sample.colors[1][2],
+  "but does not replace them outright the way OFF does")
+
+-- FULL goes all the way onto the ramp's curve
+do
+  local loader = run.loader
+  loader.modOptions = loader.modOptions or {}
+  loader.modOptions.groovy_palette = loader.modOptions.groovy_palette or {}
+  loader.modOptions.groovy_palette.advanced = "full"
+  local full = GbcPalette.resolve(richInput)
+  T.check(full[1][1] ~= tinted[1][1] or full[1][2] ~= tinted[1][2],
+    "and FULL really differs from TINT")
+
+  -- OFF is the flat swap: the same four-shade replacement DMG and CLASSIC
+  -- already do for their own modes, and the fallback this mod had before
+  -- ADVANCED existed at all
+  loader.modOptions.groovy_palette.advanced = "off"
+  local off = GbcPalette.resolve(richInput)
+  T.eq(off[1][1], sample.colors[1][1], "OFF replaces Gold's colours outright")
+  T.eq(off[4][3], sample.colors[4][3], "including the darkest rung")
+
+  -- nil colours (GbcPalette.color(nil, n), used when a caller has no
+  -- palette to hand) fall to the same flat ramp, matching what DMG_SHADES
+  -- already does for an absent palette
+  local nilResolved = GbcPalette.resolve(nil)
+  T.eq(nilResolved[1][1], sample.colors[1][1],
+    "and a nil palette resolves to the scheme's own colours, not a crash")
+
+  loader.modOptions.groovy_palette.advanced = nil
+end
+
+-- an unknown mode must fall through untouched here too
+GbcPalette.mode = "a_mode_no_longer_installed"
+local gen2Fallback = GbcPalette.resolve({ { 1, 2, 3 }, { 4, 5, 6 }, { 7, 8, 9 }, { 10, 11, 12 } })
+T.eq(gen2Fallback[1][1], 255,
+  "an uninstalled palette id degrades to Gold's own DMG fallback, not ours")
+T.eq(gen2Fallback[2][1], 170, "the fallback is the hardware's own grey ramp")
+
+GbcPalette.setMode("gbc")
 
 -- ------- the live browser
 --
@@ -239,6 +376,34 @@ do
   T.check(taken.activate == mine, "an activate another mod set is not stolen")
 end
 
+-- ------- and Gold's own COLOR row -- a different id, a different generation
+--
+-- Gen 2's OPTION screen spells the row "color" (src/ui/gen2/OptionsMenu.lua
+-- :152), not "colors", so the hook has to tell the two apart by
+-- game.save.generation rather than attach to both blindly -- a Gen 1 row
+-- named "color" by some other mod must not be mistaken for Gold's, and vice
+-- versa.
+do
+  local Screens = require("src.ui.Screens")
+  local gen2Game = { save = { generation = 2 } }
+  local colorRow = { id = "color", label = "COLOR" }
+  local colorsRow = { id = "colors", label = "COLORS" }
+  Runtime.call("ui.options.rows", function(_, r) return r end,
+    gen2Game, { colorRow, colorsRow })
+
+  T.check(type(colorRow.activate) == "function",
+    "on a Gen 2 game, the COLOR row gains an activate")
+  T.check(colorsRow.activate == nil,
+    "and the Gen 1-shaped id is left alone even if it were present")
+
+  local pushed
+  local realPush = Screens.push
+  Screens.push = function(_, id) pushed = id end
+  pcall(colorRow.activate, gen2Game)
+  Screens.push = realPush
+  T.eq(pushed, "GroovyPaletteBrowser", "and it opens the same browser screen")
+end
+
 PaletteFX.setMode("gbc")
 local pressed, closed = {}, false
 local game = {
@@ -297,6 +462,38 @@ pressed = { a = true }; browser:update()
 T.eq(PaletteFX.mode, previewed, "A keeps the previewed palette")
 T.eq(game.save.options.colors, previewed, "and leaves it saved")
 T.check(closed, "and closes")
+
+-- ------- the same browser, driving Gold's ladder instead
+--
+-- newBrowser picks its backend off game.save.generation, so this is the
+-- same screen factory as above -- not a second implementation that could
+-- drift from it -- pointed at a save shaped like Gold's.
+do
+  GbcPalette.setMode("gbc")
+  local gen2Pressed, gen2Closed = {}, false
+  local gen2Game = {
+    data = Data,
+    save = { generation = 2, options = { color = "gbc" } },
+    stack = { pop = function() gen2Closed = true end },
+    input = { wasPressed = function(_, k) return gen2Pressed[k] end },
+  }
+
+  local gen2Browser = factory.new(gen2Game)
+  T.eq(gen2Browser.isOpaque, false, "not opaque here either")
+
+  gen2Pressed = { down = true }; gen2Browser:update()
+  T.check(GbcPalette.mode ~= "gbc",
+    "moving the cursor drives GbcPalette.mode, not PaletteFX.mode")
+  T.check(PaletteFX.mode == "gbc" or PaletteFX.mode == previewed,
+    "and leaves Gen 1's own mode alone")
+  T.eq(gen2Game.save.options.color, GbcPalette.mode,
+    "the saved option follows it, under Gen 2's own key")
+
+  gen2Pressed = { b = true }; gen2Browser:update()
+  T.eq(GbcPalette.mode, "gbc", "B restores Gold's palette")
+  T.eq(gen2Game.save.options.color, "gbc", "and the saved option with it")
+  T.check(gen2Closed, "and closes")
+end
 
 -- the label box must fit the 160px screen, in the worst case
 local Font = require("src.render.Font"); Font.load(Data)
