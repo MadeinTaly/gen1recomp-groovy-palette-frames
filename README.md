@@ -12,6 +12,17 @@ row, same hotkey, and the vanilla seven palettes keep their positions.
 The mod id is still `groovy_palette`, so an existing install updates in
 place and no saved palette moves.
 
+## On Gold
+
+The **frames** work on Pokémon Gold: it draws its boxes through the same
+`Font.drawBox` this mod rewrites the border codes for, and Gold's own FRAME
+option is a separate knob (it picks which of the cart's frame pages is
+current), so the two do not fight.
+
+The **palettes** are Gen 1 only. Gold is a CGB game whose colour comes from its
+own palettes and its OPTION menu has no palette row, so the PALETTE browser and
+the COLORS row takeover switch themselves off there.
+
 ## Install
 
 Download `groovy_palette-<version>.zip` from [Releases](../../releases), then

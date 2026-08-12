@@ -4,7 +4,7 @@ return {
   author = "MadeinTaly",
   support = "https://linktr.ee/made_in_taly",
   tags = { "cosmetic", "ui", "palette", "retro" },
-  compat = { modApi = 2 },
+  compat = { modApi = 2, games = { "gen1", "gen2" } },
   differences = {
     added = {
       "thirty palettes appended to the engine's own COLORS row, cycled by the same option and the same hotkey",
@@ -19,6 +19,8 @@ return {
       "nothing about the vanilla seven: they keep their positions, so a save pointing at SGB still lands on SGB",
     },
     known = {
+      "the FRAME half runs on Gold: it draws its boxes through Chrome.box -> Font.drawBox, which reads the same Font.BORDER codes this mod rewrites, and Gold's own FRAME row picks a frame PAGE rather than the border glyphs, so the two are orthogonal",
+      "the palette half is Gen 1 only: Gold is a CGB game whose colour comes from its own palettes and its OPTION menu carries no palette row, so the PALETTE browser and the COLORS row takeover stand down there",
       "four shades is four shades -- these recolour the Game Boy's ramp, they do not add colours to a scene",
       "a palette must fall in brightness or the picture reads inside out, so every one here is checked by luminance rather than by eye; AMIGA had to be reordered away from Workbench's own layout because its orange is brighter than its blue",
       "VBOY is lifted toward white-hot at the top rung: a ramp of saturated reds has too little luminance range to stay legible",

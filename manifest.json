@@ -1,8 +1,12 @@
 {
   "id": "groovy_palette",
   "name": "Groovy Palette & Frames",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "api": 2,
+  "games": [
+    "gen1",
+    "gen2"
+  ],
   "entry": "main.lua",
   "profile": "content",
   "category": "GRAPHICS",
@@ -15,5 +19,5 @@
   "permissions": [
     "engine_internals"
   ],
-  "description": "Thirty more entries on the COLORS row -- Amiga Workbench, the C64 boot screen, a Virtual Boy, rainbow, fuchsia, vaporwave -- plus eight new borders for every text box and menu. Press A on OPTION -> COLORS and the menu lifts off the game: the palette name and nothing else, left and right to walk the list, previewed on the running game. USE ADVANCED rides the engine per-tile colorization instead of replacing it, so a palette recolours eighteen colours on screen rather than four."
+  "description": "Thirty more entries on the COLORS row -- Amiga Workbench, the C64 boot screen, a Virtual Boy, rainbow, fuchsia, vaporwave -- plus eight new borders for every text box and menu. Press A on OPTION -> COLORS and the menu lifts off the game: the palette name and nothing else, left and right to walk the list, previewed on the running game. USE ADVANCED rides the engine per-tile colorization instead of replacing it, so a palette recolours eighteen colours on screen rather than four. On Gold the FRAME half works the same way -- Gold draws its boxes through the same Font.drawBox this mod rewrites the border codes for -- while the palettes stay Gen 1, because Gold is a CGB game whose colour comes from its own palettes and its OPTION menu has no palette row at all."
 }

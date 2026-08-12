@@ -623,6 +623,21 @@ end
 
   if browserOn then
     local SCREEN = "GroovyPaletteBrowser"
+    -- ------- which generation is running
+    --
+    -- Off the live game, never a version allow-list. Gold is a CGB game
+    -- whose colour comes from its own palettes -- src/ui/gen2/OptionsMenu
+    -- .lua:149 says exactly that, and its OPTION menu carries no palette
+    -- row at all. So the palette half of this mod has nothing to act on
+    -- there and the browser would be a screen full of choices that change
+    -- nothing. The FRAME half is a different story and stays on: Gold draws
+    -- its boxes through Chrome.box -> Font.drawBox, which reads the same
+    -- Font.BORDER codes this mod rewrites.
+    local function isGen2(game)
+      local save = game and game.save
+      return save ~= nil and save.generation == 2
+    end
+
     mod.content.screens:register(SCREEN, { new = function(game)
       return newBrowser(game)
     end })
@@ -630,6 +645,7 @@ end
     mod.hooks:wrap("ui.start_menu.items", function(next, game, items)
       local out = next(game, items)
       if type(out) ~= "table" then return out end
+      if isGen2(game) then return out end
       return mod.ui.insertBefore(out, "SAVE", {
         label = "PALETTE",
         onSelect = function() mod.ui.push(game, SCREEN) end,
@@ -653,6 +669,7 @@ end
     mod.hooks:wrap("ui.options.rows", function(next, game, rows)
       local out = next(game, rows)
       if type(out) ~= "table" then return out end
+      if isGen2(game) then return out end
       for _, row in ipairs(out) do
         if row.id == "colors" and row.activate == nil then
           row.activate = function(g) mod.ui.push(g or game, SCREEN) end

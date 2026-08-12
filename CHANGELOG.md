@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.6.0 — the frames run on Gold
+
+`"games": ["gen1", "gen2"]`. The mod is two halves and they answer Gold
+differently, so they are split rather than shipped together and hoped for.
+
+- **FRAME works on Gold.** Gold draws every text box and menu through
+  `Chrome.box` -> `Font.drawBox`, which reads the same `Font.BORDER` codes
+  this mod rewrites, and the `font` registry is at the shared path so the
+  glyph sheet merges on both games. Gold's own FRAME row is a different knob
+  -- it picks which of the cart's eight frame *pages* is current, while this
+  picks which glyphs the border is built from -- so the two are orthogonal
+  rather than fighting.
+
+- **The palettes stay Gen 1.** Gold is a CGB game whose colour comes from its
+  own palettes; `src/ui/gen2/OptionsMenu.lua:149` says exactly that, and its
+  OPTION menu carries no palette row at all. Thirty extra rungs on a ladder
+  that is not there would be thirty choices that change nothing, so on Gold
+  the PALETTE entry on the START menu and the COLORS row takeover both stand
+  down.
+
+This also cuts the 0.5.0 release that never happened: the manifest had moved
+to 0.5.0 while the newest tag was still v0.4.1, so the listing and the tag had
+drifted apart. 0.6.0 puts them back together.
+
 ## 0.5.0
 
 - **The preview is now where you actually choose a colour.** Press **A** on
