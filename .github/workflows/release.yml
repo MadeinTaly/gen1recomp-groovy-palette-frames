@@ -92,9 +92,21 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         run: |
           notes=$(awk '/^## /{ if (seen) exit; seen=1; next } seen' CHANGELOG.md)
-          gh release create "v${{ steps.mod.outputs.version }}" \
+          # A version with a pre-release identifier -- 0.8.0-beta.1 -- must be
+          # published as one. Without this the launcher's ModUpdate.pickBest
+          # treats it as the newest STABLE release and offers it to everybody
+          # on the Update button, which is the exact opposite of what a beta
+          # is for. 0.8.0-beta.1 shipped that way and had to be re-flagged by
+          # hand; the flag belongs here, where the version is already known.
+          version="${{ steps.mod.outputs.version }}"
+          case "$version" in
+            *-*) prerelease="--prerelease" ;;
+            *)   prerelease="" ;;
+          esac
+          gh release create "v$version" \
             "${{ steps.mod.outputs.asset }}" \
-            --title "${{ steps.mod.outputs.name }} ${{ steps.mod.outputs.version }}" \
-            --notes "${notes:-See CHANGELOG.md}"
+            --title "${{ steps.mod.outputs.name }} $version" \
+            --notes "${notes:-See CHANGELOG.md}" \
+            $prerelease
         env:
           GH_TOKEN: ${{ github.token }}
