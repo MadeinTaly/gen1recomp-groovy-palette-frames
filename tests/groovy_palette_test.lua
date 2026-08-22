@@ -716,6 +716,235 @@ do
   end
 end
 
+-- ------- the wash: what 0.8.0 exists to stop
+--
+-- 0.7.0's recolour blended toward `rampAt`'s answer in straight RGB, and
+-- `rampAt` answers with ONE colour per luminance. So two sources of equal
+-- brightness and opposite hue -- Gold's grass and its roofs, the pair this
+-- was actually reported on -- were handed the same target and converged
+-- toward it, closing the gap between them by the blend amount. Thirty-two
+-- colours on screen collapsed toward one.
+--
+-- The property being defended is therefore not "the colours changed" (the
+-- broken version changed them too) but "the colours are still TOLD APART".
+-- That is measurable: the hue angle between two sources, before and after.
+do
+  local function hueOf(c)
+    local r, g, b = c[1] / 255, c[2] / 255, c[3] / 255
+    local max, min = math.max(r, g, b), math.min(r, g, b)
+    local span = max - min
+    if span == 0 then return nil end
+    local h
+    if max == r then h = (g - b) / span % 6
+    elseif max == g then h = (b - r) / span + 2
+    else h = (r - g) / span + 4 end
+    return h / 6
+  end
+
+  -- shortest way round the wheel: 0 is identical, 0.5 is opposite
+  local function hueApart(a, b)
+    local ha, hb = hueOf(a), hueOf(b)
+    if not (ha and hb) then return 0 end
+    local d = math.abs(ha - hb) % 1
+    return math.min(d, 1 - d)
+  end
+
+  local cherry = { { 255, 225, 225 }, { 235, 90, 90 }, { 150, 25, 45 }, { 40, 5, 15 } }
+  local grass, roof = { 60, 180, 60 }, { 190, 70, 60 }
+  local apart = hueApart(grass, roof)
+  T.check(apart > 0.3, "the fixture pair really is far apart to begin with")
+
+  -- TINT, the default, against a ramp with about as strong a hue as this mod
+  -- ships. Keeping most of the separation is the whole fix.
+  local tintG = exports.recolor(grass, cherry, 0.55, false)
+  local tintR = exports.recolor(roof, cherry, 0.55, false)
+  T.check(hueApart(tintG, tintR) > apart * 0.75,
+    ("TINT keeps the hues apart (%.3f of %.3f)")
+      :format(hueApart(tintG, tintR), apart))
+
+  -- and it is not merely leaving them alone: a green under a red scheme has
+  -- to have moved, or the palette would not read as a palette
+  T.check(tintG[1] ~= grass[1] or tintG[2] ~= grass[2] or tintG[3] ~= grass[3],
+    "while still recolouring them")
+
+  -- FULL is the setting whose promise IS the collapse, so it must still
+  -- collapse -- otherwise the two settings are one setting
+  local fullG = exports.recolor(grass, cherry, 1.0, true)
+  local fullR = exports.recolor(roof, cherry, 1.0, true)
+  T.check(hueApart(fullG, fullR) < apart * 0.5,
+    ("FULL still collapses them onto the ramp (%.3f of %.3f)")
+      :format(hueApart(fullG, fullR), apart))
+
+  -- a grey source has no hue worth keeping, so it takes the scheme's outright
+  -- -- this is what stops the fix above turning the mod into a faint wash
+  local grey = exports.recolor({ 128, 128, 128 }, cherry, 0.55, false)
+  T.check(hueOf(grey) ~= nil, "a grey source picks the scheme's hue up")
+end
+
+-- ------- the moving palettes stay legal for the whole turn
+--
+-- RAINBOW and ACID are functions of the clock, so "the ramp is a legal ramp"
+-- stops being one assertion and becomes one per frame. `animate(id, t)` is
+-- exported as a pure function of t precisely so this can walk a full turn of
+-- the wheel instead of sampling whichever second the suite happened to run
+-- in -- forty-eight seconds at 20ms, which is several times round.
+--
+-- The rule at risk is the one the whole file is built on. Holding HSV's
+-- "value" fixed would NOT have kept it: value is the largest channel, and a
+-- blue at value 1.0 is darker to the eye than a yellow at 0.8, so four rungs
+-- rotating at constant value cross over somewhere in the turn. main.lua
+-- moves them at constant LUMINANCE instead, and this is what proves it.
+do
+  local moving = {}
+  for _, p in ipairs(list) do
+    if p.motion then moving[#moving + 1] = p end
+  end
+  T.check(#moving >= 2, "the pack ships at least a cycling and a random one")
+
+  local outOfOrder, thin, ranged = {}, {}, true
+  local movedAt = {}
+  for _, p in ipairs(moving) do
+    local still = exports.animate(p.id, 0)
+    for step = 0, 2400 do
+      local t = step * 0.02
+      local ramp = exports.animate(p.id, t)
+      for i = 1, 4 do
+        for _, channel in ipairs(ramp[i]) do
+          if channel < 0 or channel > 255 then ranged = false end
+        end
+      end
+      for i = 1, 3 do
+        if luminance(ramp[i]) <= luminance(ramp[i + 1]) then
+          outOfOrder[#outOfOrder + 1] = ("%s at t=%.2f rung %d"):format(p.id, t, i)
+        end
+        if contrastRatio(ramp[i], ramp[i + 1]) < ADJACENT_FLOOR then
+          thin[#thin + 1] = ("%s at t=%.2f rungs %d-%d (%.2f)")
+            :format(p.id, t, i, i + 1, contrastRatio(ramp[i], ramp[i + 1]))
+        end
+      end
+      if contrastRatio(ramp[1], ramp[4]) < PAPER_INK_FLOOR then
+        thin[#thin + 1] = ("%s at t=%.2f paper/ink"):format(p.id, t)
+      end
+      if ramp[2][1] ~= still[2][1] or ramp[2][2] ~= still[2][2] then
+        movedAt[p.id] = true
+      end
+    end
+  end
+
+  T.eq(#outOfOrder, 0, "a moving ramp never stops falling in brightness ("
+    .. table.concat(outOfOrder, "; ", 1, math.min(#outOfOrder, 3)) .. ")")
+  T.eq(#thin, 0, "and never drops below the contrast floors ("
+    .. table.concat(thin, "; ", 1, math.min(#thin, 3)) .. ")")
+  T.check(ranged, "and stays inside 0..255")
+  for _, p in ipairs(moving) do
+    T.check(movedAt[p.id], p.id .. " actually moves")
+  end
+
+  -- t is the only input: the same instant must give the same colours, or a
+  -- palette applied twice in one frame (world, then a menu over it) would
+  -- disagree with itself
+  local a = exports.animate(moving[1].id, 3.25)
+  local b = exports.animate(moving[1].id, 3.25)
+  T.eq(a[1][1], b[1][1], "the animation is a function of t and nothing else")
+  T.eq(a[3][3], b[3][3], "on every rung")
+
+  -- a palette that does not move answers with its own table, untouched
+  local stillOne
+  for _, p in ipairs(list) do if not p.motion then stillOne = p; break end end
+  local frozen = exports.animate(stillOne.id, 9.5)
+  T.eq(frozen[1][1], stillOne.colors[1][1],
+    "a still palette ignores the clock")
+end
+
+-- ------- and a moving palette never lands on a path that BAKES
+--
+-- This is the performance contract, and it is invisible until it is broken:
+-- the ADVANCED path caches an atlas per tileset under PaletteFX.darkKey, so
+-- a colour that changes every frame would rebuild every one of them every
+-- frame. Refusing the path is what keeps the animation a shader uniform.
+do
+  local mover
+  for _, p in ipairs(list) do if p.motion then mover = p; break end end
+  PaletteFX.setMode(mover.id)
+  T.check(not PaletteFX.usesGbcPack(),
+    "a moving palette stays off the per-tile path, whatever USE ADVANCED says")
+  T.eq(PaletteFX.darkKey(), "",
+    "and bakes under the engine's own cache key, so nothing is invalidated")
+
+  -- on Gold the same rule, reached the other way: the frame renders in DMG
+  -- greys (one stable bake) and the colour arrives in the present pass
+  GbcPalette.setMode(mover.id)
+  local resolved = GbcPalette.resolve({ { 12, 200, 40 }, { 250, 10, 210 },
+                                        { 90, 90, 250 }, { 5, 5, 5 } })
+  T.eq(resolved[1][1], 255, "on Gold a moving palette hands the frame to DMG")
+  T.eq(resolved[2][1], 170, "the hardware's own grey ramp, unchanged")
+
+  local present = GbcPalette.presentColors()
+  T.check(present ~= nil,
+    "and asks for a whole-screen present pass, the way CLASSIC does")
+  T.eq(#present, 4, "which is an ordinary four-colour ramp")
+
+  -- a still palette must NOT take that pass: it has already coloured each of
+  -- Gold's eight groups separately, and a whole-screen ramp on top would
+  -- flatten exactly the distinctions it just preserved
+  GbcPalette.setMode(sample.id)
+  T.check(GbcPalette.presentColors() == nil,
+    "a still palette leaves the present pass alone")
+  GbcPalette.setMode("gbc")
+  PaletteFX.setMode("gbc")
+end
+
+-- ------- the frames, on the generation that already had some
+--
+-- Gold ships eight frames and a row to pick them; this mod shipped eight more
+-- and a second row, and the second row silently won -- `pageFor` only sends
+-- $79-$7e to Gold's frame sheet (src/render/Font.lua:245-250) and this mod's
+-- codes are not among them. One ladder of sixteen is the fix.
+do
+  local Font = require("src.render.Font")
+
+  T.eq(exports.goldFrameCount, 16, "Gold's ladder is its eight plus these eight")
+
+  exports.applyGoldFrame(3)
+  T.eq(Font.BORDER.tl, Font.DEFAULT_BORDER.tl,
+    "1..8 hands the border codes back to Gold's own sheet")
+  T.eq(Font.frameIndex(), 3, "and selects the frame the player asked for")
+
+  exports.applyGoldFrame(9)
+  T.eq(Font.BORDER.tl, 0x200, "9..16 points the six slots at this mod's page")
+  T.check(Font.BORDER.br == 0x205, "all six of them")
+
+  -- out of range is a saved value from a version that shipped more frames,
+  -- or a corrupt one; either way it has to land somewhere drawable
+  exports.applyGoldFrame(99)
+  T.eq(Font.BORDER.tl, Font.DEFAULT_BORDER.tl, "an impossible index falls back")
+
+  -- and the row itself: Gold's carries no id, only `frame = true`
+  local gen2Game = { save = { generation = 2 }, options = { frame = 8 } }
+  local frameRow = { label = "FRAME", key = "frame", frame = true }
+  Runtime.call("ui.options.rows", function(_, r) return r end,
+    gen2Game, { frameRow })
+  T.check(type(frameRow.step) == "function",
+    "Gold's FRAME row gains a step, which its menu checks before `frame`")
+
+  frameRow.step(gen2Game, 1)
+  T.eq(gen2Game.options.frame, 9,
+    "stepping past Gold's eighth reaches this mod's first")
+  T.eq(Font.BORDER.tl, 0x200, "and the border follows immediately")
+
+  gen2Game.options.frame = 16
+  frameRow.step(gen2Game, 1)
+  T.eq(gen2Game.options.frame, 1, "the sixteenth wraps back to Gold's first")
+
+  -- a Gen 1 game has no such row, and must not grow one
+  local gen1Row = { label = "FRAME", key = "frame", frame = true }
+  Runtime.call("ui.options.rows", function(_, r) return r end,
+    { save = { generation = 1 } }, { gen1Row })
+  T.check(gen1Row.step == nil, "and Gen 1 is left entirely alone")
+
+  exports.applyGoldFrame(1)
+end
+
 PaletteFX.mode = before
 run.release()
 

@@ -155,11 +155,24 @@ local PALETTES = {
 
   -- ------- colour ideas
 
-  { id = "rainbow", label = "RAINBOW",
+  { id = "rainbow", label = "RAINBOW", motion = "cycle",
     -- Four shades cannot be a spectrum, so this walks the hue wheel while
     -- brightness falls: yellow, orange-pink, violet, indigo. It reads as a
     -- rainbow because the hue moves, not because six colours are present.
+    --
+    -- And since 0.8.0 the hue moves in TIME as well as down the ramp: see
+    -- "the moving palettes" below. These four are what it looks like at
+    -- t=0, and what it is frozen at when MOTION is off -- so the ordering
+    -- and contrast rules the suite enforces are checked against a real
+    -- palette, not against a still of an animation.
     colors = { {255,241,120}, {255,120,150}, {150,70,200}, {30,20,80} } },
+
+  { id = "acid", label = "ACID", motion = "acid",
+    -- Four rungs let off the leash: every one drifts round the wheel at its
+    -- own speed, so the ramp is never the same twice and no two rungs keep
+    -- a fixed relationship. What it does NOT do is move brightness -- see
+    -- `animate` below for why that is not a stylistic choice.
+    colors = { {236,255,150}, {120,225,140}, {150,60,190}, {35,15,55} } },
 
   { id = "fuchsia", label = "FUCHSIA",
     colors = { {255,214,240}, {255,105,190}, {170,30,120}, {40,0,40} } },
@@ -251,6 +264,12 @@ return function(mod)
         { "FULL", "full" },
         { "OFF", "off" },
       } },
+    -- RAINBOW and ACID are functions of the clock rather than constants.
+    -- Off freezes both at the four colours their table gives them, which are
+    -- ordinary palettes and look it -- so this is a real setting and not a
+    -- disable switch. It is also the one accessibility answer a screen that
+    -- cycles hue continuously has to have.
+    { key = "motion", label = "MOTION", type = "toggle", default = true },
     -- The border every text box and menu is drawn with. GAME BOY is the
     -- engine's own; the rest are this mod's, drawn in tools/make_frames.py.
     { key = "frame", label = "FRAME", type = "choice", default = "gb",
@@ -286,7 +305,7 @@ return function(mod)
   -- Which ids this mod owns, and the colours behind each. Built once: MODES
   -- is read every time the option row moves, so it has to be a stable array
   -- rather than something recomputed under the cursor.
-  local mine, added = {}, {}
+  local mine, added, MOTION = {}, {}, {}
   local pick = wanted()
   for _, p in ipairs(PALETTES) do
     local isRetro = RETRO[p.id] and true or false
@@ -295,6 +314,7 @@ return function(mod)
                  or (pick == "colour" and not isRetro)
     if take then
       mine[p.id] = p.colors
+      if p.motion then MOTION[p.id] = p.motion end
       added[#added + 1] = p
     end
   end
@@ -369,19 +389,265 @@ return function(mod)
     return v
   end
 
-  local function recolor(c, ramp, amount)
+  -- ------- why the ramp cannot simply be blended in RGB
+  --
+  -- Reading the ramp as a curve (above) fixes the COUNT of colours: forty-
+  -- seven sources come back as forty-seven. It does not fix their VARIETY,
+  -- and 0.7.0 shipped without noticing the difference.
+  --
+  -- `rampAt` answers with one colour per luminance, so two sources of equal
+  -- brightness -- Gold's grass green and its roof red, say -- are handed the
+  -- SAME target. Blend both 55% of the way there in straight RGB and they do
+  -- not merely shift, they CONVERGE: the gap between them closes by 55% too.
+  -- Do that to every palette on screen and the eight background groups Gold
+  -- spent its whole colour budget distinguishing collapse toward one hue.
+  -- That is the "everything went red" a CHERRY or VBOY screenshot shows, and
+  -- it is arithmetic rather than taste -- no choice of ramp avoids it.
+  --
+  -- So the blend moves to HSV, where the three things a scheme wants to do
+  -- can be asked for separately:
+  --
+  --   VALUE       follows the ramp. This is the part that must not be
+  --               negotiable: brightness order IS Game Boy shading, and a
+  --               scheme that does not govern brightness is not a scheme.
+  --   SATURATION  moves toward the ramp's, weighted by how grey the source
+  --               already is -- so a flat wall takes the scheme's intensity
+  --               and a colour that is already vivid keeps its own.
+  --   HUE         rotates toward the ramp, by an amount that FADES OUT as
+  --               the source's own saturation rises.
+  --
+  -- The hue term is the fix. A near-grey source has no hue worth keeping, so
+  -- it takes the scheme's outright -- which is how the mod still reads as
+  -- CHERRY or OCEAN rather than as a faint wash. A saturated source is
+  -- something the cart deliberately coloured, so it is left where it is and
+  -- only re-lit. Hue DIFFERENCES survive, which is the property that was
+  -- being destroyed, and the "does this palette do anything at all" property
+  -- is kept by the value and saturation terms rather than by flattening.
+  --
+  -- FULL is deliberately exempt: it is the one setting whose whole promise
+  -- is "go all the way onto the ramp", so it keeps the straight collapse
+  -- TINT used to do by accident. The difference between the two settings is
+  -- now a real one, and the default is the side that keeps the picture.
+
+  local function toHsv(c)
+    local r, g, b = c[1] / 255, c[2] / 255, c[3] / 255
+    local max = math.max(r, g, b)
+    local min = math.min(r, g, b)
+    local span = max - min
+    local h = 0
+    if span > 0 then
+      if max == r then h = (g - b) / span % 6
+      elseif max == g then h = (b - r) / span + 2
+      else h = (r - g) / span + 4 end
+      h = h / 6
+      if h < 0 then h = h + 1 end
+    end
+    return h, (max > 0 and span / max or 0), max
+  end
+
+  local function fromHsv(h, s, v)
+    h = h % 1
+    if s <= 0 then
+      local g = clamp255(v * 255)
+      return { g, g, g }
+    end
+    local sector = h * 6
+    local i = math.floor(sector)
+    local f = sector - i
+    local p, q, t = v * (1 - s), v * (1 - s * f), v * (1 - s * (1 - f))
+    local r, g, b
+    if i == 0 then r, g, b = v, t, p
+    elseif i == 1 then r, g, b = q, v, p
+    elseif i == 2 then r, g, b = p, v, t
+    elseif i == 3 then r, g, b = p, q, v
+    elseif i == 4 then r, g, b = t, p, v
+    else r, g, b = v, p, q end
+    return { clamp255(r * 255), clamp255(g * 255), clamp255(b * 255) }
+  end
+
+  -- Round the short way. Straight interpolation between 0.95 and 0.05 walks
+  -- backwards through the entire wheel -- red to red via cyan -- which is a
+  -- visible sweep through hues neither end asked for.
+  local function hueToward(from, to, t)
+    local delta = (to - from) % 1
+    if delta > 0.5 then delta = delta - 1 end
+    return (from + delta * t) % 1
+  end
+
+  -- How hard a saturated source resists having its hue moved. Squared rather
+  -- than linear so the protection arrives early: Gold's colours mostly sit
+  -- high on the saturation scale, and a linear term still dragged them a
+  -- third of the way to a shared hue.
+  local function huePull(amount, saturation)
+    local keep = 1 - saturation
+    return amount * keep * keep
+  end
+
+  local function recolor(c, ramp, amount, collapse)
     local r, g, b = rampAt(ramp, luminance(c))
+    if collapse then
+      -- FULL: the ramp and nothing else, which is what it says on the row
+      return {
+        clamp255(c[1] + (r - c[1]) * amount),
+        clamp255(c[2] + (g - c[2]) * amount),
+        clamp255(c[3] + (b - c[3]) * amount),
+      }
+    end
+    local sh, ss, sv = toHsv(c)
+    local th, ts, tv = toHsv({ r, g, b })
+    return fromHsv(
+      hueToward(sh, th, huePull(amount, ss)),
+      ss + (ts - ss) * amount * (1 - ss),
+      sv + (tv - sv) * amount)
+  end
+
+  local function recolorAll(colors, ramp, amount, collapse)
+    local out = {}
+    for i, c in ipairs(colors) do out[i] = recolor(c, ramp, amount, collapse) end
+    return out
+  end
+
+  -- ------- the moving palettes
+  --
+  -- RAINBOW asks for something the other thirty-one do not: a colour that is
+  -- not a constant. The engine has no per-frame event for a mod to subscribe
+  -- to, and it does not need one -- everything below is reached from inside
+  -- functions the renderer already calls once a frame, so the clock can be
+  -- read where the colour is asked for.
+  --
+  -- ------- what may move, and what may not
+  --
+  -- Only HUE and SATURATION. Every rung keeps the BRIGHTNESS its entry in the
+  -- table gave it, which is not a stylistic preference: the four rungs are
+  -- fed to the shade shader lightest-first, and a ramp that stopped falling
+  -- in brightness for even one frame would turn the picture inside out for
+  -- that frame.
+  --
+  -- Holding HSV's "value" fixed does NOT achieve that, which is the trap
+  -- here and worth stating plainly. Value is the largest channel, not a
+  -- brightness the eye agrees with: a pure blue at value 1.0 carries a
+  -- luminance of 18, and a yellow at value 0.8 carries 200. Rotate four
+  -- rungs round the wheel at constant value and they will, at some phase of
+  -- the turn, cross over each other -- the ramp inverts, and the picture
+  -- with it.
+  --
+  -- So the hue moves at constant LUMINANCE instead. `atLuminance` puts a hue
+  -- back on the brightness its rung started with: scale it down if the hue
+  -- can carry more than that on its own, mix it toward white if it cannot
+  -- carry enough (both are linear in the luminance, so it is a solve rather
+  -- than a search). The ordering rule then holds for every frame by
+  -- construction, because each rung's luminance is exactly the one the
+  -- suite already checked on the table -- and the suite walks a whole turn
+  -- of the wheel and re-checks it anyway, since an invariant nothing tests
+  -- is a comment.
+  --
+  -- ------- and why they cost nothing
+  --
+  -- A moving palette must not touch anything that is BAKED. On Gen 1 that
+  -- rules out the ADVANCED path, whose atlases are cached under `darkKey`
+  -- (one re-bake of every tileset and sprite sheet per frame -- see the
+  -- cache in TileRenderer's `getGbcAtlas`); on Gold it rules out the map
+  -- canvas and the OBJ bakes, which key on `GbcPalette.mode` and would
+  -- otherwise serve whatever hue they were first built with while the menus
+  -- moved on without them.
+  --
+  -- So both generations put a moving palette on the same footing: the frame
+  -- renders in four flat greys, exactly as DMG does, and the colour arrives
+  -- in the whole-screen pass over the finished picture. On Gen 1 that is
+  -- `ensureZones` + `effectiveColors`, which the four-shade path already
+  -- used; on Gold it is `GbcPalette.presentColors`, which is how CLASSIC
+  -- turns a grey frame green (src/core/Game2.lua:1384 builds the zone from
+  -- it every frame). Nothing re-bakes, and one shader uniform changes.
+
+  local MOTION_SPEED = 0.085          -- turns per second: ~12s for a full round
+
+  -- Per-rung drift for ACID, in turns per second. Deliberately incommensurable
+  -- -- no two share a common period -- so the four never fall back into the
+  -- arrangement they started in.
+  local ACID_DRIFT = { 0.11, -0.17, 0.23, -0.07 }
+
+  -- The brightness the ORDERING rule is written in. Deliberately not the
+  -- `luminance` above: that one is a position on the ramp curve (which rung
+  -- is this colour nearest), and these weights are the ones tests/ sorts the
+  -- rungs by. The animation has to preserve the metric that is actually
+  -- being checked, not a near neighbour of it.
+  local function shadeLuma(c)
+    return 0.2126 * c[1] + 0.7152 * c[2] + 0.0722 * c[3]
+  end
+
+  -- A hue, put on a given luminance. Both branches are exact: RGB scales
+  -- linearly with value, and mixing toward white moves luminance linearly
+  -- too, so neither needs to iterate.
+  local function atLuminance(h, s, target)
+    local pure = fromHsv(h, s, 1)
+    local carry = shadeLuma(pure)
+    if carry >= target then
+      local v = target / carry
+      return { clamp255(pure[1] * v), clamp255(pure[2] * v), clamp255(pure[3] * v) }
+    end
+    -- this hue cannot be bright enough on its own; walk it toward white
+    local k = (target - carry) / (255 - carry)
     return {
-      clamp255(c[1] + (r - c[1]) * amount),
-      clamp255(c[2] + (g - c[2]) * amount),
-      clamp255(c[3] + (b - c[3]) * amount),
+      clamp255(pure[1] + (255 - pure[1]) * k),
+      clamp255(pure[2] + (255 - pure[2]) * k),
+      clamp255(pure[3] + (255 - pure[3]) * k),
     }
   end
 
-  local function recolorAll(colors, ramp, amount)
+  local function now()
+    -- The suite runs without love, and a palette that is a function of time
+    -- has to be reproducible there: no clock means t=0, which is exactly the
+    -- table as written.
+    if love and love.timer and love.timer.getTime then return love.timer.getTime() end
+    return 0
+  end
+
+  local function motionOn()
+    local ok, value = pcall(function() return mod.options:get("motion") end)
+    return (not ok) or (value ~= false)
+  end
+
+  -- The ramp `id` should be drawn with at time `t`, or its own table when it
+  -- does not move. Exposed on mod.exports for the suite, which drives `t`
+  -- itself rather than waiting on a clock.
+  local function animate(id, t)
+    local base = mine[id]
+    if not base then return nil end
+    local how = MOTION[id]
+    if not how then return base end
     local out = {}
-    for i, c in ipairs(colors) do out[i] = recolor(c, ramp, amount) end
+    for i, c in ipairs(base) do
+      local h, s = toHsv(c)
+      local keep = shadeLuma(c)
+      if how == "cycle" then
+        -- One rigid wheel: every rung turns together, so the ramp keeps the
+        -- hue SPACING the table was written with and the whole picture
+        -- rotates through the spectrum rather than smearing into one hue.
+        out[i] = atLuminance(h + t * MOTION_SPEED, s, keep)
+      else
+        -- ACID: each rung on its own wheel, and the saturation breathing
+        -- underneath, which is what stops it reading as a tidy rotation.
+        local drift = ACID_DRIFT[i] or MOTION_SPEED
+        local pulse = 0.5 + 0.5 * math.sin(t * 1.7 + i)
+        out[i] = atLuminance(h + t * drift,
+          math.min(1, s * (0.75 + 0.5 * pulse)), keep)
+      end
+    end
     return out
+  end
+
+  -- The four colours a mode is being drawn with RIGHT NOW: the animation if
+  -- it is one and motion is on, the table as written otherwise. Every read of
+  -- `mine[...]` that reaches the screen goes through this.
+  local function ramping(id)
+    local base = mine[id or ""]
+    if not base then return nil end
+    if MOTION[id] and motionOn() then return animate(id, now()) end
+    return base
+  end
+
+  local function moving(id)
+    return MOTION[id or ""] ~= nil and motionOn()
   end
 
   -- The active ramp, but only while a Groovy palette is selected AND the
@@ -390,6 +656,11 @@ return function(mod)
   local function riding()
     local ramp = mine[PaletteFX.mode or ""]
     if not ramp then return nil end
+    -- A moving palette never rides ADVANCED: the per-tile path BAKES, and a
+    -- colour that changes every frame would rebuild every atlas every frame.
+    -- Refusing here is what puts it on the four-shade path instead, where the
+    -- colour is a shader uniform and moving it is free.
+    if moving(PaletteFX.mode) then return nil end
     local how = advancedMode()
     local amount = BLEND[how]
     if not amount then return nil end
@@ -414,6 +685,7 @@ return function(mod)
 
   PaletteFX.usesGbcPack = function(mode)
     mode = mode or PaletteFX.mode
+    if moving(mode) then return originalUses(mode) end
     if mine[mode or ""] and BLEND[advancedMode()] then
       -- only claim the path when the pack is actually there to walk it
       return PaletteFX.gbcPack() ~= nil
@@ -429,11 +701,11 @@ return function(mod)
 
   PaletteFX.worldGroupColors = function(data, tileset, mapId, playerCellY)
     local groups = originalWorld(data, tileset, mapId, playerCellY)
-    local ramp, amount = riding()
+    local ramp, amount, how = riding()
     if not (groups and ramp) then return groups end
     local out = {}
     for i, palette in ipairs(groups) do
-      out[i] = recolorAll(palette, ramp, amount)
+      out[i] = recolorAll(palette, ramp, amount, how == "full")
     end
     return out
   end
@@ -446,9 +718,9 @@ return function(mod)
 
   PaletteFX.spriteObp = function(spriteDef, seed)
     local colors, group = originalObp(spriteDef, seed)
-    local ramp, amount = riding()
+    local ramp, amount, how = riding()
     if not (colors and ramp) then return colors, group end
-    return recolorAll(colors, ramp, amount), group
+    return recolorAll(colors, ramp, amount, how == "full"), group
   end
 
   -- ------- 4. do not serve a stale bake
@@ -489,12 +761,15 @@ return function(mod)
   local originalColors = PaletteFX._groovyPaletteOriginalColors
 
   PaletteFX.effectiveColors = function(c)
-    local ramp, amount = riding()
+    local ramp, amount, how = riding()
     if ramp then
       if not c then return originalColors(c) end
-      return originalColors(recolorAll(c, ramp, amount))
+      return originalColors(recolorAll(c, ramp, amount, how == "full"))
     end
-    local swap = mine[PaletteFX.mode or ""]
+    -- `ramping` rather than `mine`: this is the per-frame read, and for a
+    -- moving palette it is the one that makes it move. Everything else about
+    -- the four-shade path is unchanged.
+    local swap = ramping(PaletteFX.mode)
     if swap then return originalColors(swap) end
     return originalColors(c)
   end
@@ -602,13 +877,43 @@ return function(mod)
   GbcPalette.resolve = function(colors)
     local ramp = mine[GbcPalette.mode or ""]
     if not ramp then return originalResolve(colors) end
+    -- A moving palette hands the frame back to DMG on purpose. `originalResolve`
+    -- answers DMG_SHADES for any mode that is not "gbc", and ours is not, so
+    -- the world bakes ONCE in four greys under a cache key that never moves --
+    -- and the colour arrives afterwards, in `presentColors` below. Recolouring
+    -- here instead would leave the baked map frozen at whatever hue it was
+    -- built with while the menus carried on cycling without it.
+    if moving(GbcPalette.mode) then return originalResolve(colors) end
     local how = advancedMode()
     if how == "off" or not colors then
       -- the flat swap: what DMG and CLASSIC already do for their own three
       -- modes when there is nothing (or nothing wanted) to bend toward
       return ramp
     end
-    return recolorAll(colors, ramp, BLEND[how] or BLEND.tint)
+    return recolorAll(colors, ramp, BLEND[how] or BLEND.tint, how == "full")
+  end
+
+  -- ------- and the pass that puts the colour back
+  --
+  -- CLASSIC's own trick, borrowed whole: the scene has rendered in the four
+  -- DMG shades, so mapping those four to a palette is a single whole-screen
+  -- zone over the finished frame. `Game2:draw` rebuilds that zone from this
+  -- function every frame (src/core/Game2.lua:1384), which is precisely the
+  -- per-frame read a moving palette needs and the reason it needs no hook of
+  -- its own.
+  --
+  -- Only the moving palettes come through here. A still one has already been
+  -- applied by `resolve` above, palette by palette, and a whole-screen pass on
+  -- top of that would flatten the eight background groups it just took care to
+  -- keep apart.
+  if not GbcPalette._groovyPaletteOriginalPresent then
+    GbcPalette._groovyPaletteOriginalPresent = GbcPalette.presentColors
+  end
+  local originalPresent = GbcPalette._groovyPaletteOriginalPresent
+
+  GbcPalette.presentColors = function()
+    if moving(GbcPalette.mode) then return ramping(GbcPalette.mode) end
+    return originalPresent()
   end
 
 -- The live palette browser.
@@ -885,9 +1190,10 @@ end
     return nil -- "gb", or an id from a future version this one does not know
   end
 
-  local function applyFrame()
-    local ok, id = pcall(function() return mod.options:get("frame") end)
-    local codes = ok and frameCodes(id) or nil
+  -- Point the six slots at one of our frames, or hand them back to the
+  -- engine. The `data.font.border` half is what survives the reload Assets
+  -- fires when a sheet is touched; Font.BORDER is what the next drawBox reads.
+  local function useCodes(codes)
     -- the loader's merge target is the engine's Data, which is also what
     -- Font.load reads; there is no mod.data to prefer
     local data = require("src.core.Data")
@@ -901,12 +1207,97 @@ end
     if data and data.font then data.font.border = codes end
   end
 
+  -- ------- Gold already has this row, so do not build a second one
+  --
+  -- 0.6.0 put these frames on Gold by pointing Font.BORDER at our page, which
+  -- works -- but Gold is not Gen 1 here: it ships its OWN eight frames and its
+  -- own OPTION -> FRAME row to pick between them (src/ui/gen2/OptionsMenu.lua
+  -- :81, and the ladder at :344-350). Overriding Font.BORDER wins over that
+  -- row silently, because the codes it answers with ($79-$7e) are the only
+  -- ones `pageFor` sends to the frame sheet (src/render/Font.lua:245-250) and
+  -- ours are not among them. The player got two frame settings, one of which
+  -- quietly did nothing.
+  --
+  -- So on Gold this mod stops carrying its own frame setting and EXTENDS
+  -- Gold's instead: the row runs 1..16 now, its own eight first, then these
+  -- eight. `row.step` is checked before `row.frame` in the menu's own cycle
+  -- (OptionsMenu.lua:331-336), so attaching one takes the ladder over without
+  -- touching the engine; `game.options` is the same table the menu is holding
+  -- (Game2:showOptions passes `options = self.options` by reference), so the
+  -- number the row prints follows along.
+  --
+  -- Uninstalling with 9..16 saved is safe: `Font.setFrame(12)` finds no such
+  -- page and `pageFor` falls through to the ordinary font pages, which answer
+  -- $79-$7e with the cart's own frame 1. A stale value degrades to a working
+  -- border, not to a missing one.
+  local GOLD_FRAMES = 8
+
+  local function applyGoldFrame(index)
+    index = math.floor(tonumber(index) or 1)
+    if index < 1 or index > GOLD_FRAMES + #FRAME_ORDER then index = 1 end
+    if index <= GOLD_FRAMES then
+      useCodes(nil)
+      Font.setFrame(index)
+    else
+      useCodes(frameCodes(FRAME_ORDER[index - GOLD_FRAMES]))
+      -- Gold's own sheet is no longer being asked for, but leave the index
+      -- somewhere legal: a later uninstall reads it back.
+      Font.setFrame(1)
+    end
+  end
+
+  -- Which generation is running, learned from the live game rather than
+  -- guessed. Nil until game.ready, which is also the first moment either
+  -- branch below has anything to apply.
+  local gen2Game = nil
+
+  local function applyFrame()
+    if gen2Game then
+      applyGoldFrame(gen2Game.options and gen2Game.options.frame or 1)
+      return
+    end
+    local ok, id = pcall(function() return mod.options:get("frame") end)
+    useCodes(ok and frameCodes(id) or nil)
+  end
+
+  -- The ladder itself. Its own wrap rather than a branch inside the browser's
+  -- (further up), because the frames are not the browser's business and the
+  -- PREVIEW switch must not take Gold's frame row away with it.
+  mod.hooks:wrap("ui.options.rows", function(next, game, rows)
+    local out = next(game, rows)
+    if type(out) ~= "table" then return out end
+    local save = game and game.save
+    if not (save and save.generation == 2) then return out end
+    for _, row in ipairs(out) do
+      -- `frame = true` rather than an id: Gold's row carries no id at all
+      -- (OptionsMenu.lua:81), and `key` is what it writes, not what it is.
+      if row.frame and row.step == nil then
+        row.step = function(g, delta)
+          local options = (g and g.options) or (game and game.options)
+          local total = GOLD_FRAMES + #FRAME_ORDER
+          local index = ((options and options.frame or 1) - 1 + delta) % total + 1
+          if options then options.frame = index end
+          applyGoldFrame(index)
+        end
+      end
+    end
+    return out
+  end)
+
   mod.exports.applyFrame = applyFrame
   mod.exports.frameCodes = frameCodes
+  mod.exports.applyGoldFrame = applyGoldFrame
+  mod.exports.goldFrameCount = GOLD_FRAMES + #FRAME_ORDER
 
   -- The page has to be merged and the font loaded before the codes resolve,
   -- so the first apply waits for the game rather than running at load time.
-  mod.events:on("game.ready", applyFrame)
+  mod.events:on("game.ready", function(ev)
+    local game = ev and ev.game
+    if game and game.save and game.save.generation == 2 then
+      gen2Game = game
+    end
+    applyFrame()
+  end)
 
   -- ...and again whenever the row moves. Without this the border only
   -- changed on the next boot: Font.drawBox does read Font.BORDER fresh on
@@ -921,12 +1312,71 @@ end
 
   applyFrame()
 
+  -- ------- and a box that is not white with a black edge
+  --
+  -- On Gen 1 a text box has always taken the scheme, without this mod doing
+  -- anything: the whole UI canvas goes through the shade-remap shader, so the
+  -- box's white paper comes out as rung 1 and its black border as rung 4.
+  -- Gold's boxes do not, and that is the plain white box with the plain black
+  -- edge sitting on top of an OCEAN or a CHERRY overworld.
+  --
+  -- The reason is narrow. Gold colours text by handing a palette to the
+  -- shader around the draw -- `Chrome.printThrough` does exactly that, and it
+  -- reaches this mod already because it resolves through `GbcPalette.resolve`
+  -- (src/ui/gen2/Chrome.lua:121-124). But the BOX is not drawn that way:
+  -- `Chrome.box` calls `Font.drawBox` straight (Chrome.lua:81-84), which fills
+  -- a white rectangle and blits six black glyphs with no shader bound at all.
+  -- No palette is consulted, so no palette can reach it.
+  --
+  -- Binding one is the whole fix, and it is the same call Chrome already
+  -- makes: white is shade 0 and the border ink is shade 3, so a palette sent
+  -- through `useRaw` lands the paper on rung 1 and the border on rung 4 -- the
+  -- identical mapping Gen 1 gets from its own shader, arrived at from the
+  -- other side.
+  --
+  -- Two cases stay out. A moving palette (RAINBOW, ACID) is coloured by the
+  -- whole-screen present pass instead, and colouring the box here as well
+  -- would hand that pass a box that is no longer four greys -- so it is left
+  -- grey and picks up the cycle with everything else. And on Gen 1
+  -- `GbcPalette.mode` is never one of ours, so `ramping` answers nil and this
+  -- wrapper costs one table lookup per box and changes nothing.
+  local function boxPalette()
+    if moving(GbcPalette.mode) then return nil end
+    local ramp = ramping(GbcPalette.mode)
+    if not ramp then return nil end
+    if not GbcPalette.available() then return nil end
+    return ramp
+  end
+
+  if not Font._groovyPaletteOriginalDrawBox then
+    Font._groovyPaletteOriginalDrawBox = Font.drawBox
+  end
+  local originalDrawBox = Font._groovyPaletteOriginalDrawBox
+
+  Font.drawBox = function(tx, ty, tw, th, fill)
+    local ok, pal = pcall(boxPalette)
+    if not (ok and pal) then return originalDrawBox(tx, ty, tw, th, fill) end
+    -- Restore rather than clear: a caller mid-draw may have had its own
+    -- shader bound, and Chrome puts one back the same way (Chrome.lua:142-145).
+    local previous = love.graphics.getShader()
+    GbcPalette.useRaw(pal)
+    originalDrawBox(tx, ty, tw, th, fill)
+    love.graphics.setShader(previous)
+  end
+
   -- Read by another mod through mod.find("groovy_palette").exports.
   mod.exports.palettes = function()
     local out = {}
     for _, p in ipairs(added) do
-      out[#out + 1] = { id = p.id, label = p.label, colors = p.colors }
+      out[#out + 1] = { id = p.id, label = p.label,
+                        colors = p.colors, motion = p.motion }
     end
     return out
   end
+
+  -- The animation as a pure function of time, so the suite can walk a whole
+  -- turn of the wheel and assert the ramp stays legal at every step rather
+  -- than sampling whatever second it happened to run in.
+  mod.exports.animate = animate
+  mod.exports.recolor = recolor
 end

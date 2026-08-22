@@ -1,5 +1,86 @@
 # Changelog
 
+## 0.8.0-beta.1 — moving palettes, HSV blending, and Gold steps aside for its own frame row
+
+**Prerelease.** The Update button does not offer prereleases; the install path is
+**Launcher → MODS → the mod's row → `Versions` → the entry marked `pre` → `Install`**.
+
+- **The palettes stopped washing everything into one hue.** The old recolour in
+  0.7.0 mapped every source colour's luminance onto the scheme's four-rung ramp
+  and blended 55% toward it in straight RGB. Because `rampAt` (main.lua:374)
+  answers with ONE colour per luminance, two sources of equal brightness — Gold's
+  grass green and its roof red — were handed the SAME target and CONVERGED: the
+  gap between them closed by 55% too. On Gold, whose eight background palette
+  groups are the entire point of its colour, that collapsed the overworld to a
+  monochrome wash.
+  
+  The fix moves the blend into HSV (main.lua:432-511) so the three things a scheme
+  wants can be asked for separately: VALUE follows the ramp (non-negotiable —
+  brightness order IS Game Boy shading), SATURATION moves toward the ramp's
+  weighted by how grey the source already is, and HUE rotates toward the ramp by
+  an amount that fades out as the source's own saturation rises. So hue DIFFERENCES
+  survive.
+  
+  `FULL` deliberately keeps the old straight collapse — that setting's whole
+  promise is "go all the way onto the ramp" — so `TINT` and `FULL` are now a
+  real choice rather than two strengths of the same flattening.
+
+- **RAINBOW moves, and ACID is new.** Both are functions of the clock rather than
+  constants (main.lua:613). RAINBOW turns all four rungs together on one
+  rigid wheel (~12s a turn), so the ramp keeps the hue spacing the table was
+  written with and the whole picture rotates through the spectrum. ACID drifts
+  each rung at its own incommensurable speed with saturation breathing underneath.
+
+  Only hue and saturation move: every rung keeps the LUMINANCE its table entry
+  gave it, because the four rungs are fed to the shade shader lightest-first and
+  a ramp that stopped falling in brightness for even one frame would render the
+  picture inside out. Holding HSV's *value* fixed would not have achieved that,
+  and the distinction is the whole reason `atLuminance` (main.lua:581) exists:
+  value is the largest channel, not a brightness the eye agrees with — a pure
+  blue at value 1.0 carries a luminance of 18 and a yellow at value 0.8 carries
+  200, so four rungs rotating at constant value cross over somewhere in the turn
+  and the ramp inverts. Putting each hue back on the luminance its rung started
+  with makes the ordering rule hold by construction; `tests/` walks a full turn
+  of the wheel at 20ms and re-checks it anyway, along with both contrast floors.
+  A new `MOTION` option freezes both at their written four colours (also the
+  accessibility answer a continuously-cycling screen has to have). There is no
+  per-frame mod event and none is needed: both are reached from inside functions the
+  renderer already calls once a frame.
+  
+  Cost: a moving palette must never touch anything BAKED. On Gen 1 it therefore
+  refuses the ADVANCED path (main.lua:663 — atlases cache under `darkKey`); on Gold
+  `resolve` hands the frame back to DMG (main.lua:886) so the map canvas and OBJ
+  bakes build once in grey under a cache key that never moves, and the colour
+  arrives in `GbcPalette.presentColors` (main.lua:914) — the same whole-screen pass
+  CLASSIC uses, which `src/core/Game2.lua:1384` rebuilds every frame. Nothing
+  re-bakes; one shader uniform changes.
+
+- **On Gold the frames stopped fighting Gold's own.** Gold ships eight frames and
+  its own `OPTION → FRAME` row (src/ui/gen2/OptionsMenu.lua:81, ladder at
+  :344-350). Pointing `Font.BORDER` at this mod's page won over that row silently,
+  because `pageFor` only sends $79-$7e to the frame sheet (src/render/Font.lua
+  :245-250) and this mod's codes are not among them — so the player had two frame
+  settings, one of which quietly did nothing. Now on Gold the mod's own FRAME
+  option steps aside (main.lua:1233-1287) and Gold's row runs 1..16 instead: its
+  own eight, then these eight. Done by attaching `row.step`, which the menu checks
+  before `row.frame` (OptionsMenu.lua:331-336); `game.options` is the same table the
+  menu holds (Game2:showOptions passes `options = self.options` by reference) so the
+  printed number follows. Uninstalling with 9..16 saved degrades to the cart's frame
+  1, not to a missing border. Gen 1 is unchanged — it has no such row.
+
+- **Gold's text boxes take the scheme.** On Gen 1 they always did, for free: the
+  whole UI canvas goes through the shade-remap shader, so white paper comes out as
+  rung 1 and the black border as rung 4. Gold's do not — `Chrome.box` calls
+  `Font.drawBox` straight (src/ui/gen2/Chrome.lua:81-84), which fills a white
+  rectangle and blits six black glyphs with no shader bound, so no palette can
+  reach it. (`Chrome.printThrough` was already reached, because it resolves through
+  `GbcPalette.resolve` — Chrome.lua:121-124.) `Font.drawBox` is now wrapped
+  (main.lua:1356) to bind the scheme's palette via `useRaw` around the draw:
+  shade 0 is the paper, shade 3 the border ink, which is the identical mapping Gen 1
+  gets from its own shader arrived at from the other side. Moving palettes stay out
+  — they are coloured by the present pass, and a box that is no longer four greys
+  would confuse it.
+
 ## 0.7.0 — the palettes run on Gold too
 
 0.6.0 shipped believing Gold's OPTION menu "carries no palette row at all".

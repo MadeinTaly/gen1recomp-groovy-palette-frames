@@ -1,6 +1,6 @@
 # gen1recomp-groovy-palette-frames
 
-Thirty more entries on the **COLORS** row for
+Thirty-one more entries on the **COLORS** row for
 [Gen1Recomp](https://github.com/bryanthaboi/gen1recomp) — Amiga Workbench,
 the C64 boot screen, a Virtual Boy, an amber terminal, and a pile of colour
 ideas the Game Boy never had — and **eight new borders** for every text box
@@ -15,9 +15,10 @@ place and no saved palette moves.
 ## On Gold
 
 The **frames** work on Pokémon Gold: it draws its boxes through the same
-`Font.drawBox` this mod rewrites the border codes for, and Gold's own FRAME
-option is a separate knob (it picks which of the cart's frame pages is
-current), so the two do not fight.
+`Font.drawBox` this mod rewrites the border codes for. Gold also has a FRAME
+option of its own, and until 0.8.0 this mod quietly overrode it — the two were
+separate knobs and the mod's always won, so the cart's row looked broken. They
+are one ladder now: Gold's row runs 1..16, its own eight and then these eight.
 
 The **palettes** work on Gold too. Gold's colour really does come from its
 own palettes -- that part was always true -- but Gold has a choke point of
@@ -25,7 +26,7 @@ its own that every one of those palettes passes through:
 `src/render/GbcPalette.lua`, whose own comment says outright that "every
 colour in the Gen 2 port arrives here". It already carries three modes
 (`GBC`, `DMG`, `CLASSIC`) reached from Gold's own `OPTION → COLOR` row, and
-this mod appends the same thirty ids there the same way it appends them to
+this mod appends the same thirty-one ids there the same way it appends them to
 Gen 1's `COLORS` row, then wraps `GbcPalette.resolve` the way it wraps
 `PaletteFX.effectiveColors`. The `PALETTE` start-menu entry and the browser
 work on Gold exactly as they do on Red/Blue/Yellow -- pressing A on `OPTION →
@@ -39,7 +40,15 @@ scheme along the same curve `riding ADVANCED` uses below, rather than
 flattening them onto four shared rungs; `OFF` is that flat four-shade swap,
 matching what Gold's own `DMG` and `CLASSIC` modes already do.
 
-The one place this does not reach is the title screen and the Gold/Silver
+Text boxes and menus now take the scheme on Gold too. On Gen 1 they always did
+for free — the whole UI canvas goes through the shade-remap shader — but Gold's
+boxes draw with no shader bound, so they stayed white and black. The mod now
+binds the palette around the box draw with the same call Gold uses for menu
+text, so white becomes rung 1 and the border becomes rung 4. Moving palettes
+(RAINBOW, ACID) stay out — they are coloured by the whole-screen pass, and a
+box that is not four greys would confuse it.
+
+The one place this still does not reach is the title screen and the Gold/Silver
 boot cinema, which draw from **pre-rendered art** rather than through
 `GbcPalette.resolve` -- `TitleState:gray()` swaps to a grey-only image set
 for any COLOR mode but `GBC`, the same branch `DMG` and `CLASSIC` already
@@ -78,8 +87,9 @@ cycles the list.
 | --- | --- | --- | --- |
 | `FRAME` | `GAME BOY` + eight | at once | the border on every text box and menu — see below |
 | `USE ADVANCED` | `TINT` / `FULL` / `OFF` | at once | ride the engine's per-tile colour instead of replacing it — see below |
+| `MOTION` | on / off | at once | cycle RAINBOW's hue and ACID's drift through time; off freezes both at their table colours — the accessibility answer for continuous animation |
 | `PREVIEW` | on / off | next launch | both ways into the browser above; off removes the START row, the A on COLORS and the screen, and leaves the palettes |
-| `PACKS` | `ALL` / `RETRO` / `COLOUR` | next launch | all thirty, the twelve that are somebody's real hardware, or the eighteen invented ones |
+| `PACKS` | `ALL` / `RETRO` / `COLOUR` | next launch | all thirty-one, the twelve that are somebody's real hardware, or the nineteen invented ones |
 
 The last two are read once, when the mod loads: one builds the COLORS list
 and the other registers a screen and a menu row. The first two are read
@@ -88,8 +98,13 @@ every time they are used, so moving them shows immediately — you can watch
 
 ## The frames
 
-`THIN` `DOUBLE` `TRIPLE` `THICK` `WIDE` `DASH` `BEADS` `TRACK`, plus
-`GAME BOY` for the engine's own.
+On **Gen 1**: `THIN` `DOUBLE` `TRIPLE` `THICK` `WIDE` `DASH` `BEADS` `TRACK`, plus
+`GAME BOY` for the engine's own, cycled from the `FRAME` row on the mod's OPTIONS.
+
+On **Gold**: the same eight extend Gold's own `OPTION → FRAME` row, which picks
+between the cart's eight frames and these eight (16 total). Uninstalling with one
+of the mod's frames saved degrades safely to the cart's frame 1. The mod's own
+FRAME row steps aside; Gold's row handles everything.
 
 A border in this engine is not a texture. It is **six font glyphs** —
 `tl h tr v bl br` — and `Font.drawBox` reads that table fresh on every
@@ -164,6 +179,47 @@ curve is indexed by brightness, so a palette out of order would map light
 tiles to dark colours and turn the world inside out. Every palette here is
 checked by luminance in the test suite.
 
+### Why the blend moved from RGB to HSV
+
+Two source colours of equal brightness are answered by `rampAt` with a single
+target colour. Blending both 55% toward that target in straight RGB closes the
+gap between them by 55% too — so a green and a red of the same brightness
+converge into a muddy brown, and Gold's eight background palette groups collapse
+into a monochrome wash. It is arithmetic rather than taste: no choice of ramp
+avoids it, which is why the fix had to be to the blend itself.
+
+The fix splits the blend into three channels in HSV: VALUE follows the ramp
+(immovable — brightness order is Game Boy shading), SATURATION moves toward
+the ramp's weighted by how grey the source already is, and HUE rotates by an
+amount that fades out as the source becomes more saturated. A vivid red stays
+red and only gets re-lit; a dull wall takes the scheme's hue outright. Hue
+DIFFERENCES survive.
+
+`FULL` keeps the old RGB collapse — it is the one setting whose promise is "go
+all the way onto the ramp" — so `TINT` and `FULL` are now a real choice.
+
+### Moving palettes: RAINBOW and ACID
+
+**RAINBOW** cycles its hue at a fixed rate, ~12 seconds per full rotation, so the
+whole screen rotates through the spectrum while the ramp's brightness order stays
+put. **ACID** lets each rung drift at its own incommensurable speed with saturation
+breathing underneath — no two rungs keep the same relationship for long. Both
+reach the screen from inside the renderer's per-frame path with no per-frame hook
+needed.
+
+Only hue and saturation move; each rung's **luminance** is fixed. The shade
+shader reads rungs lightest-first, and if brightness stopped falling for even one
+frame the picture would render inside out. Freezing HSV's *value* would not have
+been enough — value is the largest channel, and a blue at full value is darker to
+the eye than a yellow at four fifths of it, so four rungs turning at constant
+value cross over somewhere in the rotation. Each hue is put back on the luminance
+its rung started with instead. The suite walks a full turn of the wheel and
+asserts the order and both contrast floors at every step.
+
+The **MOTION** option freezes both at their table colours, which are ordinary
+palettes and look it. This is the accessibility answer for a continuously-cycling
+screen.
+
 ## Why the browser is not a grid of swatches
 
 A swatch cannot tell you what a palette does. The engine colorises at
@@ -177,7 +233,7 @@ the list *is* the preview, at full size, on the real picture.
 **Hardware** — AMIGA (Workbench 1.3), DPAINT, C64, SPECCY, CGA, APPLE II,
 POCKET, GB LIGHT, VBOY, AMBER, PHOSPHR, PLASMA.
 
-**Colour** — RAINBOW, FUCHSIA, SUNSET, OCEAN, FOREST, LAVA, ICE, CANDY,
+**Colour** — RAINBOW, ACID, FUCHSIA, SUNSET, OCEAN, FOREST, LAVA, ICE, CANDY,
 VAPOR, NEON, TOXIC, SEPIA, NOIR, CHERRY, MIDNITE, GOLD, MINT, GRAPE.
 
 ## The one rule, and the two palettes it caught
@@ -188,7 +244,7 @@ brightness across the row — and getting that wrong does not merely look odd,
 it renders the game **inside out**, because the shading that describes every
 sprite's form is the brightness order.
 
-Thirty palettes is well past what anyone will check carefully by eye, so the
+Thirty-one palettes is well past what anyone will check carefully by eye, so the
 test suite checks all of them by luminance. It caught two:
 
 **AMIGA.** Workbench 1.3's four colours are grey, blue `#0055AA`, orange
