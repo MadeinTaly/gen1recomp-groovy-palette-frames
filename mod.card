@@ -2,7 +2,6 @@
 return {
   summary = "Thirty more COLORS palettes and eight new text-box borders: Amiga, C64, Virtual Boy, rainbow, vaporwave.",
   author = "MadeinTaly",
-  support = "https://linktr.ee/made_in_taly",
   tags = { "cosmetic", "ui", "palette", "retro" },
   compat = { modApi = 2, games = { "gen1", "gen2" } },
   differences = {

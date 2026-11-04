@@ -335,9 +335,6 @@ The Pokémon Company. Amiga, Commodore, Sinclair and Apple marks belong to
 their respective owners and are used only to say which machine a palette is
 imitating.
 
-## Support
-
-<https://linktr.ee/made_in_taly>
 
 ## Licence
 
