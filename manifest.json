@@ -1,7 +1,7 @@
 {
   "id": "groovy_palette",
   "name": "Groovy Palette & Frames",
-  "version": "0.8.0-beta.1",
+  "version": "0.8.0-beta.2",
   "api": 2,
   "games": [
     "gen1",

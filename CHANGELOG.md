@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0-beta.2 -- no support link
+
+- The support link is gone from the mod's details and from the README.
+  Nothing else changes.
+
 ## 0.8.0-beta.1 — moving palettes, HSV blending, and Gold steps aside for its own frame row
 
 **Prerelease.** The Update button does not offer prereleases; the install path is
